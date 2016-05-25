@@ -1,53 +1,29 @@
+import readModules from 'ember-cli-mirage/utils/read-modules';
 import ENV from '../config/environment';
 import baseConfig, { testConfig } from '../mirage/config';
 import Server from 'ember-cli-mirage/server';
-import readModules from 'ember-cli-mirage/utils/read-modules';
-
-function hasModulesOfType(modulesMap, type) {
-  var modulesOfType = modulesMap[type] || {};
-
-  return _.keys(modulesOfType).length > 0;
-}
 
 export default {
   name: 'ember-cli-mirage',
-  initialize: function(container, application) {
-    var env = ENV.environment;
+  initialize: function(application) {
+    if (arguments.length > 1) { // Ember < 2.1
+      var container = arguments[0],
+          application = arguments[1];
+    }
+    let environment = ENV.environment;
 
-    if (_shouldUseMirage(env, ENV['ember-cli-mirage'])) {
-      var modulesMap = readModules(ENV.modulePrefix);
-      var hasFactories = hasModulesOfType(modulesMap, 'factories');
-      var hasDefaultScenario = modulesMap['scenarios'].hasOwnProperty('default');
-      var hasModels = hasModulesOfType(modulesMap, 'models');
-      var hasSerializers = hasModulesOfType(modulesMap, 'serializers');
+    if (_shouldUseMirage(environment, ENV['ember-cli-mirage'])) {
+      let modules = readModules(ENV.modulePrefix);
+      let options = _.assign(modules, {environment, baseConfig, testConfig})
 
-      var server = new Server({
-        environment: env,
-        modelsMap: hasModels ? modulesMap['models'] : null,
-        serializersMap: hasSerializers ? modulesMap['serializers'] : null
-      });
-
-      server.loadConfig(baseConfig);
-
-      if (env === 'test' && testConfig) {
-        server.loadConfig(testConfig);
-      }
-
-      if (env === 'test' && hasFactories) {
-        server.loadFactories(modulesMap['factories']);
-      } else if (env !== 'test' && hasDefaultScenario && hasFactories) {
-        server.loadFactories(modulesMap['factories']);
-        modulesMap['scenarios']['default'](server);
-      } else {
-        server.db.loadData(modulesMap['fixtures']);
-      }
+      new Server(options);
     }
   }
 };
 
 function _shouldUseMirage(env, addonConfig) {
-  var userDeclaredEnabled = typeof addonConfig.enabled !== 'undefined';
-  var defaultEnabled = _defaultEnabled(env, addonConfig);
+  let userDeclaredEnabled = typeof addonConfig.enabled !== 'undefined';
+  let defaultEnabled = _defaultEnabled(env, addonConfig);
 
   return userDeclaredEnabled ? addonConfig.enabled : defaultEnabled;
 }
@@ -57,8 +33,8 @@ function _shouldUseMirage(env, addonConfig) {
   to initialize Mirage.
 */
 function _defaultEnabled(env, addonConfig) {
-  var usingInDev = env === 'development' && !addonConfig.usingProxy;
-  var usingInTest = env === 'test';
+  let usingInDev = env === 'development' && !addonConfig.usingProxy;
+  let usingInTest = env === 'test';
 
   return usingInDev || usingInTest;
 }
