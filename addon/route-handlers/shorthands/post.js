@@ -1,56 +1,26 @@
+import assert from 'ember-cli-mirage/assert';
 import BaseShorthandRouteHandler from './base';
-import { pluralize } from 'ember-cli-mirage/utils/inflector';
-import Db from 'ember-cli-mirage/db';
+import { camelize } from 'ember-cli-mirage/utils/inflector';
 
 export default class PostShorthandRouteHandler extends BaseShorthandRouteHandler {
 
   /*
-    Push a new model of type *type* to the db.
+    Push a new model of type *camelizedModelName* to the db.
 
     For example, this will push a 'user':
-      this.stub('post', '/contacts', 'contact');
+      this.post('/contacts', 'user');
   */
-  handleStringShorthand(string, dbOrSchema, request) {
-    let type = string;
-    let collection = pluralize(string);
 
-    if (dbOrSchema instanceof Db) {
-      let payload = this._getJsonBodyForRequest(request);
-      let attrs = payload[type];
-      let db = dbOrSchema;
-      if (!db[collection]) {
-        console.error("Mirage: The route handler for " + request.url + " is trying to insert data into the " + collection + " collection, but that collection doesn't exist. To create it, create an empty fixture file or factory.");
-      }
+  handleStringShorthand(request, modelClass) {
+    let modelName = this.shorthand;
+    let camelizedModelName = camelize(modelName);
+    assert(
+      modelClass,
+      `The route handler for ${request.url} is trying to access the ${camelizedModelName} model, but that model doesn't exist. Create it using 'ember g mirage-model ${modelName}'.`
+    );
 
-      let model = db[collection].insert(attrs);
-
-      let response = {};
-      response[type] = model;
-
-      return response;
-
-    } else {
-      let attrs = this._getAttrsForRequest(request);
-      let schema = dbOrSchema;
-      let model = schema[type].create(attrs);
-
-      return model;
-    }
+    let attrs = this._getAttrsForRequest(request, modelClass.camelizedModelName);
+    return modelClass.create(attrs);
   }
-
-  /*
-    Push a new model to the db. The type is found
-    by singularizing the last portion of the URL.
-
-    For example, this will push a 'contact'.
-      this.stub('post', '/contacts');
-  */
-  handleUndefinedShorthand(undef, dbOrSchema, request) {
-    let url = this._getUrlForRequest(request);
-    let type = this._getTypeFromUrl(url);
-
-    return this.handleStringShorthand(type, dbOrSchema, request);
-  }
-
 
 }

@@ -4,10 +4,10 @@ import schemaHelper from '../schema-helper';
 import { module, test } from 'qunit';
 
 module('Integration | Serializers | Base | Attrs List', {
-  beforeEach: function() {
+  beforeEach() {
     this.schema = schemaHelper.setup();
     this.registry = new SerializerRegistry(this.schema, {
-      author: Serializer.extend({
+      wordSmith: Serializer.extend({
         attrs: ['id', 'name']
       })
     });
@@ -18,33 +18,33 @@ module('Integration | Serializers | Base | Attrs List', {
 });
 
 test(`it returns only the whitelisted attrs when serializing a model`, function(assert) {
-  var user = this.schema.author.create({
+  let wordSmith = this.schema.wordSmiths.create({
     id: 1,
     name: 'Link',
-    age: 123,
+    age: 123
   });
 
-  var result = this.registry.serialize(user);
+  let result = this.registry.serialize(wordSmith);
   assert.deepEqual(result, {
-    author: {
-      id: 1,
+    wordSmith: {
+      id: '1',
       name: 'Link'
     }
   });
 });
 
 test(`it returns only the whitelisted attrs when serializing a collection`, function(assert) {
-  let schema = this.schema;
-  schema.author.create({id: 1, name: 'Link', age: 123});
-  schema.author.create({id: 2, name: 'Zelda', age: 456});
+  let { schema } = this;
+  schema.wordSmiths.create({ id: 1, name: 'Link', age: 123 });
+  schema.wordSmiths.create({ id: 2, name: 'Zelda', age: 456 });
 
-  let collection = this.schema.author.all();
+  let collection = this.schema.wordSmiths.all();
   let result = this.registry.serialize(collection);
 
   assert.deepEqual(result, {
-    authors: [
-      {id: 1, name: 'Link'},
-      {id: 2, name: 'Zelda'}
+    wordSmiths: [
+      { id: '1', name: 'Link' },
+      { id: '2', name: 'Zelda' }
     ]
   });
 });

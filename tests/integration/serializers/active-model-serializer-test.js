@@ -1,3 +1,4 @@
+// jscs:disable requireCamelCaseOrUpperCaseIdentifiers
 import ActiveModelSerializer from 'ember-cli-mirage/serializers/active-model-serializer';
 import { hasMany, belongsTo } from 'ember-cli-mirage';
 import Schema from 'ember-cli-mirage/orm/schema';
@@ -7,21 +8,48 @@ import SerializerRegistry from 'ember-cli-mirage/serializer-registry';
 import { module, test } from 'qunit';
 
 module('Integration | Serializer | ActiveModelSerializer', {
-  beforeEach: function() {
+  beforeEach() {
     let db = new Db();
     this.schema = new Schema(db);
     this.schema.registerModels({
-      author: Model.extend({
+      wordSmith: Model.extend({
         blogPosts: hasMany()
       }),
-      'blog-post': Model.extend({
-        author: belongsTo()
+      blogPost: Model.extend({
+        wordSmith: belongsTo()
+      }),
+      user: Model.extend({
+        contactInfos: hasMany()
+      }),
+      contactInfo: Model.extend({
+        user: belongsTo()
       })
     });
 
-    let link = this.schema.author.create({name: 'Link', age: 123});
-    link.createBlogPost({title: 'Lorem'});
-    link.createBlogPost({title: 'Ipsum'});
+    let link = this.schema.wordSmiths.create({ name: 'Link', age: 123 });
+    link.createBlogPost({ title: 'Lorem' });
+    link.createBlogPost({ title: 'Ipsum' });
+
+    this.schema.wordSmiths.create({ name: 'Zelda', age: 230 });
+
+    let user = this.schema.users.create({ name: 'John Peach', age: 123 });
+    user.createContactInfo({ email: 'peach@bb.me' });
+    user.createContactInfo({ email: 'john3000@mail.com' });
+
+    this.schema.users.create({ name: 'Pine Apple', age: 230 });
+
+    this.registry = new SerializerRegistry(this.schema, {
+      application: ActiveModelSerializer,
+      wordSmith: ActiveModelSerializer.extend({
+        attrs: ['id', 'name'],
+        include: ['blogPosts']
+      }),
+      user: ActiveModelSerializer.extend({
+        attrs: ['id', 'name'],
+        include: ['ContactInfos'],
+        embed: true
+      })
+    });
   },
 
   afterEach() {
@@ -29,34 +57,89 @@ module('Integration | Serializer | ActiveModelSerializer', {
   }
 });
 
-test('it sideloads associations and snake-cases attributes', function(assert) {
-  let registry = new SerializerRegistry(this.schema, {
-    application: ActiveModelSerializer,
-    author: ActiveModelSerializer.extend({
-      attrs: ['id', 'name'],
-      relationships: ['blogPosts']
-    })
-  });
-
-  let link = this.schema.author.find(1);
-  let result = registry.serialize(link);
+test('it sideloads associations and snake-cases relationships and attributes correctly for a model', function(assert) {
+  let link = this.schema.wordSmiths.find(1);
+  let result = this.registry.serialize(link);
 
   assert.deepEqual(result, {
-    author: {
-      id: 1,
+    word_smith: {
+      id: '1',
       name: 'Link',
-      blog_post_ids: [1, 2]
+      blog_post_ids: ['1', '2']
     },
     blog_posts: [
       {
-        id: 1,
+        id: '1',
         title: 'Lorem',
-        author_id: 1
+        word_smith_id: '1'
       },
       {
-        id: 2,
+        id: '2',
         title: 'Ipsum',
-        author_id: 1
+        word_smith_id: '1'
+      }
+    ]
+  });
+});
+
+test('it sideloads associations and snake-cases relationships and attributes correctly for a collection', function(assert) {
+  let wordSmiths = this.schema.wordSmiths.all();
+  let result = this.registry.serialize(wordSmiths);
+
+  assert.deepEqual(result, {
+    word_smiths: [
+      {
+        id: '1',
+        name: 'Link',
+        blog_post_ids: ['1', '2']
+      },
+      {
+        id: '2',
+        name: 'Zelda',
+        blog_post_ids: []
+      }
+    ],
+    blog_posts: [
+      {
+        id: '1',
+        title: 'Lorem',
+        word_smith_id: '1'
+      },
+      {
+        id: '2',
+        title: 'Ipsum',
+        word_smith_id: '1'
+      }
+    ]
+  });
+});
+
+test('it embeds associations and snake-cases relationships and attributes correctly for a collection', function(assert) {
+  let users = this.schema.users.all();
+  let result = this.registry.serialize(users);
+
+  assert.deepEqual(result, {
+    users: [
+      {
+        id: '1',
+        name: 'John Peach',
+        contact_infos: [
+          {
+            id: '1',
+            email: 'peach@bb.me',
+            user_id: '1'
+          },
+          {
+            id: '2',
+            email: 'john3000@mail.com',
+            user_id: '1'
+          }
+        ]
+      },
+      {
+        id: '2',
+        name: 'Pine Apple',
+        contact_infos: []
       }
     ]
   });

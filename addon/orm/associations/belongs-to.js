@@ -1,5 +1,7 @@
 import Association from './association';
-import { capitalize } from 'ember-cli-mirage/utils/inflector';
+import _assign from 'lodash/object/assign';
+import { capitalize, camelize, pluralize } from 'ember-cli-mirage/utils/inflector';
+import assert from 'ember-cli-mirage/assert';
 
 class BelongsTo extends Association {
 
@@ -7,21 +9,21 @@ class BelongsTo extends Association {
     The belongsTo association adds a fk to the owner of the association
   */
   getForeignKeyArray() {
-    return [this.owner, `${this.target}Id`];
+    return [camelize(this.ownerModelName), `${camelize(this.key)}Id`];
   }
 
   getForeignKey() {
-    return `${this.target}Id`;
+    return `${camelize(this.key)}Id`;
   }
 
   addMethodsToModelClass(ModelClass, key, schema) {
     let modelPrototype = ModelClass.prototype;
-    var association = this;
-    var foreignKey = this.getForeignKey();
+    let association = this;
+    let foreignKey = this.getForeignKey();
 
-    var associationHash = {};
+    let associationHash = {};
     associationHash[key] = this;
-    modelPrototype.belongsToAssociations = _.assign(modelPrototype.belongsToAssociations, associationHash);
+    modelPrototype.belongsToAssociations = _assign(modelPrototype.belongsToAssociations, associationHash);
     modelPrototype.associationKeys.push(key);
     modelPrototype.associationIdKeys.push(foreignKey);
 
@@ -31,7 +33,7 @@ class BelongsTo extends Association {
         object.parentId
           - returns the associated parent's id
       */
-      get: function() {
+      get() {
         return this.attrs[foreignKey];
       },
 
@@ -39,10 +41,11 @@ class BelongsTo extends Association {
         object.parentId = (parentId)
           - sets the associated parent (via id)
       */
-      set: function(id) {
-        if (id && !schema[association.target].find(id)) {
-          throw 'Couldn\'t find ' + association.target + ' with id = ' + id;
-        }
+      set(id) {
+        assert(
+          !id || schema.db[pluralize(camelize(association.modelName))].find(id),
+          `Couldn\'t find ${association.modelName} with id = ${id}`
+        );
 
         this.attrs[foreignKey] = id;
         return this;
@@ -54,11 +57,11 @@ class BelongsTo extends Association {
         object.parent
           - returns the associated parent
       */
-      get: function() {
-        var foreignKeyId = this[foreignKey];
-        if (foreignKeyId) {
+      get() {
+        let foreignKeyId = this[foreignKey];
+        if (foreignKeyId != null) {
           association._tempParent = null;
-          return schema[association.target].find(foreignKeyId);
+          return schema[pluralize(camelize(association.modelName))].find(foreignKeyId);
 
         } else if (association._tempParent) {
           return association._tempParent;
@@ -71,7 +74,7 @@ class BelongsTo extends Association {
         object.parent = (parentModel)
           - sets the associated parent (via model)
       */
-      set: function(newModel) {
+      set(newModel) {
         if (newModel && newModel.isNew()) {
           this[foreignKey] = null;
           association._tempParent = newModel;
@@ -89,8 +92,8 @@ class BelongsTo extends Association {
       object.newParent
         - creates a new unsaved associated parent
     */
-    modelPrototype['new' + capitalize(key)] = function(attrs) {
-      var parent = schema[key].new(attrs);
+    modelPrototype[`new${capitalize(key)}`] = function(attrs) {
+      let parent = schema[pluralize(camelize(association.modelName))].new(attrs);
 
       this[key] = parent;
 
@@ -102,8 +105,8 @@ class BelongsTo extends Association {
         - creates an associated parent, persists directly to db,
           and updates the owner's foreign key
     */
-    modelPrototype['create' + capitalize(key)] = function(attrs) {
-      var parent = schema[key].create(attrs);
+    modelPrototype[`create${capitalize(key)}`] = function(attrs) {
+      let parent = schema[pluralize(camelize(association.modelName))].create(attrs);
 
       this[foreignKey] = parent.id;
 

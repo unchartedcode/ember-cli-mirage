@@ -4,7 +4,7 @@ import {module, test} from 'qunit';
 module('Unit | Model');
 
 test('it can be instantiated', function(assert) {
-  var model = new Model({}, 'user');
+  let  model = new Model({}, 'user');
   assert.ok(model);
 });
 
@@ -14,8 +14,8 @@ test('it cannot be instantiated without a schema', function(assert) {
   }, /requires a schema/);
 });
 
-test('it cannot be instantiated without a type', function(assert) {
+test('it cannot be instantiated without a modelName', function(assert) {
   assert.throws(function() {
     new Model({});
-  }, /requires a type/);
+  }, /requires a modelName/);
 });

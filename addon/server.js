@@ -1,12 +1,106 @@
-import { pluralize } from './utils/inflector';
+// jscs:disable requireParenthesesAroundArrowParam
+
+import { pluralize, camelize } from './utils/inflector';
 import Pretender from 'pretender';
 import Db from './db';
 import Schema from './orm/schema';
-import ActiveModelSerializer from 'ember-cli-mirage/serializers/active-model-serializer';
+import assert from './assert';
 import SerializerRegistry from './serializer-registry';
 import RouteHandler from './route-handler';
 
-const { isArray } = _;
+import _isArray from 'lodash/lang/isArray';
+import _keys from 'lodash/object/keys';
+import _pick from 'lodash/object/pick';
+import _assign from 'lodash/object/assign';
+
+function createPretender(server) {
+  return new Pretender(function() {
+    this.passthroughRequest = function(verb, path, request) {
+      if (server.shouldLog()) {
+        console.log(`Passthrough request: ${verb.toUpperCase()} ${request.url}`);
+      }
+    };
+
+    this.handledRequest = function(verb, path, request) {
+      if (server.shouldLog()) {
+        console.log(`Successful request: ${verb.toUpperCase()} ${request.url}`);
+        let { responseText } = request;
+        let loggedResponse;
+
+        try {
+          loggedResponse = JSON.parse(responseText);
+        } catch(e) {
+          loggedResponse = responseText;
+        }
+
+        console.log(loggedResponse);
+      }
+    };
+
+    this.unhandledRequest = function(verb, path) {
+      path = decodeURI(path);
+      assert(
+        `Your Ember app tried to ${verb} '${path}',
+         but there was no route defined to handle this request.
+         Define a route that matches this path in your
+         mirage/config.js file. Did you forget to add your namespace?`
+      );
+    };
+  });
+}
+
+const defaultRouteOptions = {
+  coalesce: false,
+  timing: undefined
+};
+
+const defaultPassthroughs = [
+  'http://localhost:0/chromecheckurl'
+];
+export { defaultPassthroughs };
+
+function isOption(option) {
+  if (!option || typeof option !== 'object') {
+    return false;
+  }
+
+  let allOptions = Object.keys(defaultRouteOptions);
+  let optionKeys = Object.keys(option);
+  for (let i = 0; i < optionKeys.length; i++) {
+    let key = optionKeys[i];
+    if (allOptions.indexOf(key) > -1) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/*
+  Args can be of the form
+    [options]
+    [object, code]
+    [function, code]
+    [shorthand, options]
+    [shorthand, code, options]
+    with all optional. This method returns an array of
+    [handler (i.e. the function, object or shorthand), code, options].
+*/
+
+function extractRouteArguments(args) {
+  let [ lastArg ] = args.splice(-1);
+  if (isOption(lastArg)) {
+    lastArg = _assign({}, defaultRouteOptions, lastArg);
+  } else {
+    args.push(lastArg);
+    lastArg = defaultRouteOptions;
+  }
+  let t = 2 - args.length;
+  while (t-- > 0) {
+    args.push(undefined);
+  }
+  args.push(lastArg);
+  return args;
+}
 
 export default class Server {
 
@@ -19,91 +113,78 @@ export default class Server {
 
     this._defineRouteHandlerHelpers();
 
-    /*
-      Bootstrap dependencies
-
-      TODO: Inject / belongs in a container
-    */
     this.db = new Db();
-
-    this.pretender = this.interceptor = new Pretender(function() {
-      this.prepareBody = function(body) {
-        return body ? JSON.stringify(body) : '{"error": "not found"}';
-      };
-
-      this.unhandledRequest = function(verb, path) {
-        path = decodeURI(path);
-        console.error("Mirage: Your Ember app tried to " + verb + " '" + path +
-                      "', but there was no route defined to handle this " +
-                      "request. Define a route that matches this path in your " +
-                      "mirage/config.js file. Did you forget to add your namespace?");
-      };
-    });
-
-    if (this._hasModulesOfType(options, 'models')) {
-      // TODO: really should be injected into Controller, server doesn't need to know about schema
-      this.schema = new Schema(this.db);
-      this.schema.registerModels(options.models);
-      this.serializerOrRegistry = new SerializerRegistry(this.schema, options.serializers);
-    } else {
-      this.serializerOrRegistry = new ActiveModelSerializer();
-    }
-
-    // TODO: Better way to inject server into test env
-    if (this.environment === 'test') {
-      window.server = this;
-    }
+    this.schema = new Schema(this.db, options.models);
+    this.serializerOrRegistry = new SerializerRegistry(this.schema, options.serializers);
 
     let hasFactories = this._hasModulesOfType(options, 'factories');
     let hasDefaultScenario = options.scenarios && options.scenarios.hasOwnProperty('default');
+
+    this.pretender = createPretender(this);
 
     if (options.baseConfig) {
       this.loadConfig(options.baseConfig);
     }
 
-    if (this.environment === 'test' && options.testConfig) {
-      this.loadConfig(options.testConfig);
+    if (this.isTest()) {
+      if (options.testConfig) {
+        this.loadConfig(options.testConfig);
+      }
+
+      window.server = this; // TODO: Better way to inject server into test env
     }
 
-    if (this.environment === 'test' && hasFactories) {
+    if (this.isTest() && hasFactories) {
       this.loadFactories(options.factories);
-
-    } else if (this.environment !== 'test' && hasDefaultScenario && hasFactories) {
+    } else if (!this.isTest() && hasDefaultScenario) {
       this.loadFactories(options.factories);
       options.scenarios.default(this);
-
     } else {
       this.loadFixtures();
     }
+
+    if (options.useDefaultPassthroughs) {
+      this._configureDefaultPassthroughs();
+    }
+  }
+
+  isTest() {
+    return this.environment === 'test';
+  }
+
+  shouldLog() {
+    return typeof this.logging !== 'undefined' ? this.logging : !this.isTest();
   }
 
   loadConfig(config) {
     config.call(this);
-    this.timing = this.environment === 'test' ? 0 : (this.timing || 0);
+    this.timing = this.isTest() ? 0 : (this.timing || 0);
   }
 
   passthrough(...paths) {
     let verbs = ['get', 'post', 'put', 'delete', 'patch'];
-    let lastArg = paths[paths.length-1];
+    let lastArg = paths[paths.length - 1];
 
     if (paths.length === 0) {
-      paths = ['/*catchall'];
-    } else if (isArray(lastArg)) {
+      // paths = ['http://localhost:7357'];
+      paths = ['/**', '/'];
+    } else if (_isArray(lastArg)) {
       verbs = paths.pop();
     }
 
     verbs.forEach(verb => {
-      paths.map(path => this._getFullPath(path))
-        .forEach(path => {
-          this.pretender[verb](path, this.pretender.passthrough);
-        });
+      paths.forEach(path => {
+        let fullPath = this._getFullPath(path);
+        this.pretender[verb](fullPath, this.pretender.passthrough);
+      });
     });
   }
 
   loadFixtures(...args) {
-    let fixtures = this.options.fixtures;
+    let { fixtures } = this.options;
     if (args.length) {
-      fixtures = _.pick(fixtures, ...args);
+      let camelizedArgs = args.map(camelize);
+      fixtures = _pick(fixtures, ...camelizedArgs);
     }
 
     this.db.loadData(fixtures);
@@ -113,36 +194,93 @@ export default class Server {
     Factory methods
   */
   loadFactories(factoryMap) {
-    var _this = this;
     // Store a reference to the factories
     this._factoryMap = factoryMap;
 
     // Create a collection for each factory
-    _.keys(factoryMap).forEach(function(type) {
-      _this.db.createCollection(pluralize(type));
+    _keys(factoryMap).forEach(type => {
+      let collectionName = this.schema ? pluralize(camelize(type)) : pluralize(type);
+      this.db.createCollection(collectionName);
     });
   }
 
-  create(type, overrides) {
-    var collection = pluralize(type);
-    var currentRecords = this.db[collection];
-    var sequence = currentRecords ? currentRecords.length: 0;
-    if (!this._factoryMap || !this._factoryMap[type]) {
-      throw "You're trying to create a " + type + ", but no factory for this type was found";
-    }
-    var OriginalFactory = this._factoryMap[type];
-    var Factory = OriginalFactory.extend(overrides);
-    var factory = new Factory();
+  factoryFor(type) {
+    let camelizedType = camelize(type);
 
-    var attrs = factory.build(sequence);
-    return this.db[collection].insert(attrs);
+    if (this._factoryMap && this._factoryMap[camelizedType]) {
+      return this._factoryMap[camelizedType];
+    }
+  }
+
+  build(type, overrides) {
+    let camelizedType = camelize(type);
+
+    // Store sequence for factory type as instance variable
+    this.factorySequences = this.factorySequences || {};
+    this.factorySequences[camelizedType] = this.factorySequences[camelizedType] + 1 || 0;
+
+    let OriginalFactory = this.factoryFor(type);
+    if (OriginalFactory) {
+      let Factory = OriginalFactory.extend(overrides);
+      let factory = new Factory();
+
+      let sequence = this.factorySequences[camelizedType];
+      return factory.build(sequence);
+    } else {
+      return overrides;
+    }
+  }
+
+  buildList(type, amount, overrides) {
+    let list = [];
+
+    for (let i = 0; i < amount; i++) {
+      list.push(this.build(type, overrides));
+    }
+
+    return list;
+  }
+
+  // When there is a Model defined, we should return an instance
+  // of it instead of returning the bare attributes.
+  create(type, overrides, collectionFromCreateList) {
+    let attrs = this.build(type, overrides);
+    let modelOrRecord;
+
+    if (this.schema && this.schema[pluralize(camelize(type))]) {
+      let modelClass = this.schema[pluralize(camelize(type))];
+
+      modelOrRecord = modelClass.create(attrs);
+
+    } else {
+      let collection, collectionName;
+
+      if (collectionFromCreateList) {
+        collection = collectionFromCreateList;
+      } else {
+        collectionName = this.schema ? pluralize(camelize(type)) : pluralize(type);
+        collection = this.db[collectionName];
+      }
+
+      assert(collection, `You called server.create(${type}) but no model or factory was found. Try \`ember g mirage-model ${type}\`.`);
+      modelOrRecord = collection.insert(attrs);
+    }
+
+    let OriginalFactory = this.factoryFor(type);
+    if (OriginalFactory && OriginalFactory.attrs && OriginalFactory.attrs.afterCreate) {
+      OriginalFactory.attrs.afterCreate(modelOrRecord, this);
+    }
+
+    return modelOrRecord;
   }
 
   createList(type, amount, overrides) {
-    var list = [];
+    let list = [];
+    let collectionName = this.schema ? pluralize(camelize(type)) : pluralize(type);
+    let collection = this.db[collectionName];
 
-    for (var i = 0; i < amount; i++) {
-      list.push(this.create(type, overrides));
+    for (let i = 0; i < amount; i++) {
+      list.push(this.create(type, overrides, collection));
     }
 
     return list;
@@ -156,38 +294,50 @@ export default class Server {
   }
 
   _defineRouteHandlerHelpers() {
-    [['get'], ['post'], ['put'], ['delete', 'del'], ['patch']].forEach(([verb, alias]) => {
+    [['get'], ['post'], ['put'], ['delete', 'del'], ['patch'], ['head']].forEach(([verb, alias]) => {
       this[verb] = (path, ...args) => {
-        this._registerRouteHandler(verb, path, args);
+        let [ rawHandler, customizedCode, options ] = extractRouteArguments(args);
+        this._registerRouteHandler(verb, path, rawHandler, customizedCode, options);
       };
 
-      if (alias) { this[alias] = this[verb]; }
+      if (alias) {
+        this[alias] = this[verb];
+      }
     });
   }
 
-  _registerRouteHandler(verb, path, args) {
-    let dbOrSchema = (this.schema || this.db);
-    let routeHandler = new RouteHandler(dbOrSchema, verb, args, this.serializerOrRegistry);
+  _serialize(body) {
+    if (body) {
+      return typeof body !== 'string' ? JSON.stringify(body) : body;
+    } else {
+      return '{"error": "not found"}';
+    }
+  }
+
+  _registerRouteHandler(verb, path, rawHandler, customizedCode, options) {
+
+    let routeHandler = new RouteHandler({
+      schema: this.schema,
+      verb, rawHandler, customizedCode, options, path,
+      serializerOrRegistry: this.serializerOrRegistry
+    });
+
     let fullPath = this._getFullPath(path);
+    let timing = options.timing !== undefined ? options.timing : (() => this.timing);
 
-    this.pretender[verb](fullPath, request => {
-      let rackResponse = routeHandler.handle(request);
-
-      let shouldLog = typeof this.logging !== 'undefined' ? this.logging : (this.environment !== 'test');
-
-      if (shouldLog) {
-        console.log('Successful request: ' + verb.toUpperCase() + ' ' + request.url);
-        console.log(rackResponse[2]);
-      }
-
-      return rackResponse;
-    }, () => { return this.timing; });
+    this.pretender[verb](
+      fullPath,
+      (request) => {
+        let [ code, headers, response ] = routeHandler.handle(request);
+        return [ code, headers, this._serialize(response) ];
+      },
+      timing
+    );
   }
 
   _hasModulesOfType(modules, type) {
-    let modulesOfType = modules[type] || {};
-
-    return _.keys(modulesOfType).length > 0;
+    let modulesOfType = modules[type];
+    return modulesOfType ? _keys(modulesOfType).length > 0 : false;
   }
 
   /*
@@ -207,12 +357,17 @@ export default class Server {
 
       // otherwise, if there is a urlPrefix, use that as the beginning of the path
       if (!!urlPrefix.length) {
-        fullPath += urlPrefix[urlPrefix.length - 1] === '/' ? urlPrefix : urlPrefix + '/';
+        fullPath += urlPrefix[urlPrefix.length - 1] === '/' ? urlPrefix : `${urlPrefix}/`;
       }
 
       // if a namespace has been configured, add it before the path
       if (!!namespace.length) {
-        fullPath += namespace ? namespace + '/' : namespace;
+        fullPath += namespace ? `${namespace}/` : namespace;
+      }
+
+      // we're at the root, ensure a leading /
+      if (!urlPrefix.length && !namespace.length) {
+        fullPath += '/';
       }
 
       // finally add the configured path
@@ -222,4 +377,9 @@ export default class Server {
     return fullPath;
   }
 
+  _configureDefaultPassthroughs() {
+    defaultPassthroughs.forEach(passthroughUrl => {
+      this.passthrough(passthroughUrl);
+    });
+  }
 }

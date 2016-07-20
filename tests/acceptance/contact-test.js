@@ -1,38 +1,29 @@
-import Ember from 'ember';
-import {module, test} from 'qunit';
-import startApp from '../helpers/start-app';
+import {test} from 'qunit';
+import moduleForAcceptance from '../helpers/module-for-acceptance';
 
-var App;
-var contact;
+let contact;
 
-module('Acceptance: Contact', {
-  beforeEach: function() {
-    App = startApp();
+moduleForAcceptance('Acceptance | Contact', {
+  beforeEach() {
     contact = server.create('contact');
-  },
-  afterEach: function() {
-    server.shutdown();
-    Ember.run(App, 'destroy');
   }
 });
 
-test("I can view a contact", function(assert) {
+test('I can view a contact', function(assert) {
   visit('/1');
 
   andThen(function() {
     assert.equal(currentRouteName(), 'contact');
-    assert.equal( find('p:first').text(), 'The contact is ' + contact.name );
+    assert.equal(find('p:first').text(), `The contact is ${contact.name}`);
   });
 });
 
-test("I can delete a contact", function(assert) {
+test('I can delete a contact', function(assert) {
   visit('/1');
   click('button:contains(Delete)');
 
   andThen(function() {
     assert.equal(currentRouteName(), 'contacts');
-    assert.equal( find('p').length, 0 );
+    assert.equal(find('p').length, 0);
   });
 });
-
-

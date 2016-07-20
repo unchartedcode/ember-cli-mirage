@@ -9,17 +9,34 @@ export default {
     let db = new Db();
     this.schema = new Schema(db);
     this.schema.registerModels({
-      author: Model.extend({
-        posts: Mirage.hasMany()
+      wordSmith: Model.extend({
+        blogPosts: Mirage.hasMany()
       }),
-      post: Model.extend({
-        author: Mirage.belongsTo(),
-        comments: Mirage.hasMany()
+      blogPost: Model.extend({
+        wordSmith: Mirage.belongsTo(),
+        fineComments: Mirage.hasMany()
       }),
-      comment: Model.extend({
-        post: Mirage.belongsTo()
+      fineComment: Model.extend({
+        blogPost: Mirage.belongsTo()
       }),
-      photo: Model
+      greatPhoto: Model,
+
+      foo: Model.extend({
+        bar: Mirage.belongsTo()
+      }),
+      bar: Model.extend({
+        baz: Mirage.belongsTo()
+      }),
+      baz: Model.extend({
+        quuxes: Mirage.hasMany()
+      }),
+      quux: Model.extend({
+        zomgs: Mirage.hasMany()
+      }),
+      zomg: Model.extend({
+        lol: Mirage.belongsTo()
+      }),
+      lol: Model
     });
 
     return this.schema;

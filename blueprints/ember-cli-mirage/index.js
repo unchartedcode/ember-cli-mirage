@@ -3,6 +3,9 @@
 'use strict';
 
 var path = require('path');
+var existsSync = require('exists-sync');
+var chalk = require('chalk');
+var EOL = require('os').EOL;
 
 module.exports = {
   normalizeEntityName: function() {
@@ -12,13 +15,16 @@ module.exports = {
   },
 
   fileMapTokens: function() {
+    var self = this;
     return {
       __root__: function(options) {
-        if (options.inAddon) {
-          return path.join('tests', 'dummy', 'app');
+        if (!!self.project.config()['ember-cli-mirage'] && !!self.project.config()['ember-cli-mirage'].directory) {
+          return self.project.config()['ember-cli-mirage'].directory;
+        } else if (options.inAddon) {
+          return path.join('tests', 'dummy', 'mirage');
+        } else {
+          return '/mirage';
         }
-
-        return 'app';
       }
     };
   },
@@ -32,10 +38,29 @@ module.exports = {
       after: '"predef": [\n'
     });
 
-    return this.addBowerPackagesToProject([
-      {name: 'pretender', target: '~0.10.1'},
-      {name: 'lodash', target: '~3.7.0'},
-      {name: 'Faker', target: '~3.0.0'}
-    ]);
+    if (existsSync('tests/helpers/destroy-app.js')) {
+      this.insertIntoFile('tests/helpers/destroy-app.js', '  server.shutdown();', {
+        after: "Ember.run(application, 'destroy');\n"
+      });
+    } else {
+      this.ui.writeLine(
+        EOL +
+        chalk.yellow(
+          '******************************************************' + EOL +
+          'destroy-app.js helper is not present. Please read this' + EOL +
+          'https://gist.github.com/blimmer/35d3efbb64563029505a' + EOL +
+          'to see how to fix the problem.' + EOL +
+          '******************************************************' + EOL
+        )
+      );
+    }
+
+    return this.addBowerPackagesToProject([{
+      name: 'pretender',
+      target: '~1.1.0'
+    }, {
+      name: 'Faker',
+      target: '~3.1.0'
+    }]);
   }
 };

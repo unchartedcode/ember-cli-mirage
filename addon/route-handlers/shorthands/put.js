@@ -1,53 +1,27 @@
+import assert from 'ember-cli-mirage/assert';
 import BaseShorthandRouteHandler from './base';
-import { pluralize } from 'ember-cli-mirage/utils/inflector';
-import Db from 'ember-cli-mirage/db';
+import { camelize } from 'ember-cli-mirage/utils/inflector';
 
 export default class PutShorthandRouteHandler extends BaseShorthandRouteHandler {
 
   /*
     Update an object from the db, specifying the type.
 
-      this.stub('put', '/contacts/:id', 'user');
+      this.put('/contacts/:id', 'user');
   */
-  handleStringShorthand(type, dbOrSchema, request) {
-    var id = this._getIdForRequest(request);
-    var collection = pluralize(type);
+  handleStringShorthand(request, modelClass) {
+    let modelName = this.shorthand;
+    let camelizedModelName = camelize(modelName);
 
-    if (dbOrSchema instanceof Db) {
-      let payload = this._getJsonBodyForRequest(request);
-      let attrs = payload[type];
-      let db = dbOrSchema;
-      if (!db[collection]) {
-        console.error("Mirage: The route handler for " + request.url + " is trying to modify data from the " + collection + " collection, but that collection doesn't exist. To create it, create an empty fixture file or factory.");
-      }
+    assert(
+      modelClass,
+      `The route handler for ${request.url} is trying to access the ${camelizedModelName} model, but that model doesn't exist. Create it using 'ember g mirage-model ${modelName}'.`
+    );
 
-      var data = db[collection].update(id, attrs);
+    let id = this._getIdForRequest(request);
+    let attrs = this._getAttrsForRequest(request, modelClass.camelizedModelName);
 
-      var response = {};
-      response[type] = data;
-
-      return response;
-
-    } else {
-      let attrs = this._getAttrsForRequest(request);
-      let schema = dbOrSchema;
-
-      return schema[type].find(id).update(attrs);
-    }
-  }
-
-  /*
-    Update an object from the db based on singular version
-    of the last portion of the url.
-
-      this.stub('put', '/contacts/:id');
-  */
-  handleUndefinedShorthand(undef, dbOrSchema, request) {
-    var id = this._getIdForRequest(request);
-    var url = this._getUrlForRequest(request);
-    var type = this._getTypeFromUrl(url, id);
-
-    return this.handleStringShorthand(type, dbOrSchema, request);
+    return modelClass.find(id).update(attrs);
   }
 
 }

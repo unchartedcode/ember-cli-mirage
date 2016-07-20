@@ -1,8 +1,11 @@
 import DbCollection from './db-collection';
 
-/*
-  The db, an identity map.
-*/
+/**
+ * The db, an identity map.
+ * @class Db
+ * @constructor
+ * @public
+ */
 class Db {
 
   constructor(initialData) {
@@ -13,23 +16,36 @@ class Db {
     }
   }
 
+  /**
+   * @method loadData
+   * @param data
+   * @public
+   */
   loadData(data) {
     for (let key in data) {
       this.createCollection(key, data[key]);
     }
   }
 
+  /**
+   * @method createCollection
+   * @param name
+   * @param initialData
+   * @public
+   */
   createCollection(name, initialData) {
     if (!this[name]) {
-      var newCollection = new DbCollection(name, initialData);
+      let newCollection = new DbCollection(name, initialData);
 
       Object.defineProperty(this, name, {
         get() {
-          var recordsCopy = newCollection.all();
+          let recordsCopy = newCollection.all();
 
           ['insert', 'find', 'where', 'update', 'remove', 'firstOrCreate']
             .forEach(function(method) {
-              recordsCopy[method] = newCollection[method].bind(newCollection);
+              recordsCopy[method] = function() {
+                return newCollection[method](...arguments);
+              };
             });
 
           return recordsCopy;
@@ -45,12 +61,21 @@ class Db {
     return this;
   }
 
+  /**
+   * @method createCollections
+   * @param ...collections
+   * @public
+   */
   createCollections(...collections) {
-    collections.forEach( c => this.createCollection(c) );
+    collections.forEach((c) => this.createCollection(c));
   }
 
+  /**
+   * @method emptyData
+   * @public
+   */
   emptyData() {
-    this._collections.forEach( c => c.remove() );
+    this._collections.forEach((c) => c.remove());
   }
 }
 

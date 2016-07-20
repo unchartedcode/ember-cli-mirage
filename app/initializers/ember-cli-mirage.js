@@ -2,6 +2,7 @@ import readModules from 'ember-cli-mirage/utils/read-modules';
 import ENV from '../config/environment';
 import baseConfig, { testConfig } from '../mirage/config';
 import Server from 'ember-cli-mirage/server';
+import _assign from 'lodash/object/assign';
 
 export default {
   name: 'ember-cli-mirage',
@@ -10,16 +11,20 @@ export default {
       var container = arguments[0],
           application = arguments[1];
     }
-    let environment = ENV.environment;
 
-    if (_shouldUseMirage(environment, ENV['ember-cli-mirage'])) {
-      let modules = readModules(ENV.modulePrefix);
-      let options = _.assign(modules, {environment, baseConfig, testConfig})
-
-      new Server(options);
+    if (_shouldUseMirage(ENV.environment, ENV['ember-cli-mirage'])) {
+      startMirage(ENV);
     }
   }
 };
+
+export function startMirage(env = ENV) {
+  let environment = env.environment;
+  let modules = readModules(env.modulePrefix);
+  let options = _assign(modules, {environment, baseConfig, testConfig});
+
+  return new Server(options);
+}
 
 function _shouldUseMirage(env, addonConfig) {
   let userDeclaredEnabled = typeof addonConfig.enabled !== 'undefined';

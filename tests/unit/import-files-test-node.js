@@ -1,7 +1,9 @@
  /*jshint -W079 */
 /* jshint node: true */
+// jscs:disable
 var expect = require('chai').expect;
 var EmberAddon = require('ember-cli/lib/broccoli/ember-addon');
+var _ = require('lodash');
 
 describe('import files', function() {
   this.timeout(15000);
@@ -14,7 +16,7 @@ describe('import files', function() {
     process.env.EMBER_ENV = 'production';
     var addon = new EmberAddon();
 
-    expect(addon.legacyFilesToAppend).to.not.include.members([
+    expect(_.values(addon._scriptOutputFiles)[0]).to.not.include.members([
       addon.bowerDirectory + '/FakeXMLHttpRequest/fake_xml_http_request.js',
       addon.bowerDirectory + '/route-recognizer/dist/route-recognizer.js',
       addon.bowerDirectory + '/pretender/pretender.js',
@@ -27,7 +29,7 @@ describe('import files', function() {
       process.env.EMBER_ENV = environment;
       var addon = new EmberAddon();
 
-      expect(addon.legacyFilesToAppend).to.include.members([
+      expect(_.values(addon._scriptOutputFiles)[0]).to.include.members([
         addon.bowerDirectory + '/FakeXMLHttpRequest/fake_xml_http_request.js',
         addon.bowerDirectory + '/route-recognizer/dist/route-recognizer.js',
         addon.bowerDirectory + '/pretender/pretender.js',
@@ -39,7 +41,8 @@ describe('import files', function() {
   it('includes third party libraries in production when enabled is set to true', function() {
     process.env.EMBER_ENV = 'production';
     var addon = new EmberAddon({ configPath: 'tests/fixtures/config/environment-production-enabled' });
-    expect(addon.legacyFilesToAppend).to.include.members([
+
+    expect(_.values(addon._scriptOutputFiles)[0]).to.include.members([
       addon.bowerDirectory + '/FakeXMLHttpRequest/fake_xml_http_request.js',
       addon.bowerDirectory + '/route-recognizer/dist/route-recognizer.js',
       addon.bowerDirectory + '/pretender/pretender.js',

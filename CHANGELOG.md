@@ -1,5 +1,255 @@
 # Ember CLI Mirage Changelog
 
+In general, it's good to run `ember g ember-cli-mirage` after upgrading.
+
+## 0.2.1
+
+Update notes:
+
+  - None
+
+Changes:
+
+  - [ENHANCEMENT] Ensure mirage tree is linted @rwjblue
+  - [FEATURE] #762 adds `afterCreate` to factories @seanpdoyle, @samselikoff
+  - [BUGFIX] #769 ensure embedded collection keys are dynamic @arnodirlam
+
+## 0.2.0
+
+Update notes:
+
+  - The `inverseOf` options was renamed to `inverse`, to be consistent with Ember Data
+
+Changes:
+
+  - [BREAKING CHANGE] #640 `inverseOf` was renamed to `inverse` @samselikoff
+  - [FEATURE] #729 Add `this.normalizedRequestAttrs` helper method to function route handler @samselikoff
+  - [ENHANCEMENT] #743 Ensure associations can be passed in during model creation @samselikoff
+  - [BUGFIX] #738 Ensure directory location can be configured @gthmb
+  - General cleanup, updates and docs @lizzerdrix, @timjcook, @samselikoff
+
+## 0.2.0-beta.9
+
+This release contains some breaking changes from 0.2.0-beta.8.
+
+Update notes:
+
+  - Schema model classes are now pluralized. They used to be singularized, taking after Rails' conventions, but I think it's better to match our db conventions (e.g. `db.users`).
+
+  So you'll need to change
+
+  ```js
+  schema.user.all()
+  schema.user.find(1)
+  ```
+
+  to
+
+  ```js
+  schema.users.all()
+  schema.users.find(1)
+  ```
+
+  and so on. The upgrade should be a relatively straightforward.
+
+  - Breaking changes on ORM/Collection:
+
+    - There's now a `.models` property on Collections, which gives you access to the underlying JavaScript array. This should be used if you want to munge the collection using Lodash, Ramda et al.
+
+    ```js
+    let usersCollection = schema.users.all();
+    let uniqueUsers = _.uniq(usersCollection.models, u => u.firstName);
+    ```
+
+    - Collection no longer attempts to mimic an array. This turned out to be confusing, since you can't really subclass arrays in JavaScript, and it would sometimes be compatible with functions that operate on arrays, but sometimes not.
+
+    So, you can no longer use the array accessor on a collection, meaning the following won't work:
+
+    ```js
+    let authors = schema.authors.all();
+
+    // The following no longer work
+    authors[1];
+    authors.length;
+    authors.push(model);
+    authors.map(f);
+    authors.forEach(f);
+    authors.reduce(f);
+    authors.toArray(); // use authors.models instead
+    ```
+
+    Instead, if you need to use array-methods on `Collections`, access the `.models` property. You can always convert your transformed array back to a `Collection`, for example to tell Mirage to serialize your response:
+
+    ```js
+    import { Collection } from 'ember-cli-mirage';
+
+    let authors = schema.authors.all().models;
+    let topPosts = authors.map(a => a.topPost);
+
+    return new Collection('post', topPosts);
+    ```
+
+Changes:
+
+  - [BREAKING CHANGE] #705 Drop Collection.[], add Collection.models @samselikoff
+  - [BREAKING CHANGE] #705 Pluralize Schema class names @samselikoff
+  - [FEATURE] #705 Add this.serialize to function route handlers @samselikoff
+  - [ENHANCEMENT] Server.create falls back to Models if Factories don't exist @samselikoff
+  - [ENHANCEMENT] Support aliases for --proxy @elbeezy
+  - [ENHANCEMENT] Do not include files if on Fastboot @locks
+  - [BUGFIX] #709 Fix Serializer include logic @cibernox
+  - [BUGFIX] #666 Ensure model serializers are used for JSONAPI @samselikoff
+  - General cleanup, updates and docs @lizzerdrix, @lependu, @amyrlam, @blimmer, @noslouch, @bgentry, @mitchlloyd, @BrianSipple, @acorncom, @stefanpennar
+
+## 0.2.0.beta-8
+
+Update notes:
+
+Changes:
+
+  - [FEATURE] #622 Add `links` method to JSONAPISerializer @richmolj
+  - [FEATURE] #655 Add importable rest-serializer @rondale-sc
+  - [FEATURE] #269 Dynamic factory attributes can reference other dynamic attributes @lazybensch
+  - [FEATURE] #603 Support inverse foreign keys @ef4
+  - [ENHANCEMENT] #323 Extract startMirage from initializer @mitchlloyd
+  - [ENHANCEMENT] #617 JSON:API Serializer includes intermediate relationships when using dot paths @RSSchermer
+  - [ENHANCEMENT] #610 Allow Mirage to be a dependency of another addon @donovan-graham
+  - General cleanup and updates @lolmaus, @samselikoff
+
+## 0.2.0.beta-7
+
+Update notes: none.
+
+Changes:
+
+ - [BUGFIX] #602 Fix regression in Db IdentityManager @samselikoff
+
+## 0.2.0.beta-6
+
+Update notes: None.
+
+Changes:
+
+ - [BUGFIX] #585 Ensure DB autoincrement ids account for string ints @samselikoff
+ - [BUGFIX] #592 GET shorthands 404s for nonexistant singular resources @samselikoff
+
+## 0.2.0.beta-5
+
+Update notes: None.
+
+Changes:
+
+ - [ENHANCEMENT] Allow files to be excluded from non-prodution builds Danail Nachev
+ - [ENHANCEMENT] #552 Add default passthroughs @anulman
+ - [ENHANCEMENT] #427 Factories return models @ef4
+ - [ENHANCEMENT] #561 Ensure foreign keys are picked up in shorthands @abuiles
+ - [ENHANCEMENT] #546 Add named associations @samselikoff
+ - [BUGFIX] #548 Shorthands can read ID from json:api request body @lkhaas
+ - General cleanup and updates @ef4 @abuiles @elwayman02
+
+## 0.2.0.beta-4
+
+Update notes: None.
+
+Changes:
+
+ - [ENHANCEMENT] #501 Adds ModelClass.first @lependu
+ - [BUGFIX] #543 Ensure Mirage works within Addons @cibernox
+ - [BUGFIX] #535 Include original message on rethrow errors @hamled
+ - [BUGFIX] #515 Ensure serializer#serialize always receives request @2468ben
+ - [BUGFIX] #506 Ensure serializer#normalize looks up model-specific serializers @2468ben
+ - [BUGFIX] #507 Ensure foreign keys are added once @samselikoff
+ - General cleanup @bekzod, @alecho, @koriroys, @cibernox
+
+## 0.2.0.beta-3
+
+Update notes:
+
+  - There was a bug where dasherized multiword serializers and fixtures were not registered correctly. This has been fixed, so if you happen to have camelized multiword serializers or fixtures
+
+        /mirage/serializers/blogPost.js
+        /mirage/fixtures/blogPosts.js
+
+    you can rename these to dasherized names
+
+        /mirage/serializers/blog-post.js
+        /mirage/fixtures/blog-posts.js
+
+    In Mirage 0.2, all filenames should be dasherized, following the conventions of Ember CLI. If you ever encounter a situation where this doesn't work, please file an issue, as this is a bug.
+
+Changes:  
+
+  - [ENHANCEMENT] Better blueprints
+  - [BUGFIX] Ensure multiword dasherized serializers work #333
+  - [BUGFIX] Ensure multiword dasherized fixtures work
+
+## 0.2.0.beta-2
+
+Update notes:
+  - `Serializer#relationships` was renamed to `Serializer#include`.
+
+  Before:
+
+  ```
+  export default Serializer.extend({
+    relationships: ['comments']
+  });
+  ```
+
+  After:
+
+  ```
+  export default Serializer.extend({
+    include: ['comments']
+  });
+  ```
+
+  - We now use `destroyApp` test helper in Ember-CLI to shutdown the Mirage server after each test to resolve a memory leak reported in #226. It's important to run `ember g ember-cli-mirage` when upgrading to take advantage of this fix.
+  - Inserting records with numerical IDs that have already have been used will throw an error per changes from #417
+  - `model.type` was renamed to `model.modelName`, and is dasherized (instead of camelized)
+
+Changes:
+  - [BREAKING CHANGE] POST and PUT shorthands require a Serializer#normalize function, and will transform your attrs to camelCase. (If you're using JsonApiSerializer or ActiveModelSerializer, this is done for you). To keep using the db yourself, write custom POST and PUT route handlers.
+  - [BREAKING CHANGE] Serializer#relationships was renamed to Serializer#include #424 @lolmaus
+  - [BREAKING CHANGE] Change `model.type` to `model.modelName`, ensure it's dasherized #454
+  - [BREAKING CHANGE] Inserting records with numerical IDs that have already have been used will throw an per changes from #417
+  - [BREAKING CHANGE] DB stores ids as strings #462 @jherdman
+  - [BREAKING CHANGE] GET shorthand with single owner and many children throws an error.
+  - [BREAKING CHANGE] Arrays in shorthands should always contain singularzied model names (e.g. dasherized)
+  - [FEATURE] Add `?include` query param support in JSONAPISerializer @lolmaus
+  - [FEATURE] Add `build` & `buildList` to factories #459 @ballpointpenguin
+  - [ENHANCEMENT] JSONAPISerializer defaults to dasherized types and relationships (and other JSONAPI enhancements) @lolmaus
+  - [ENHANCEMENT] shutdown Mirage server on destroyAppp @blimmer
+  - [ENHANCEMENT] createList perf enhancement @alvinvogelzang
+  - [ENHANCEMENT] improve DB autoincrement @jherdman
+  - [ENHANCEMENT] #493 Ability to set timing parameter for individual routes @bekzod
+  - [FEATURE] [Allow nested factory objects](https://github.com/samselikoff/ember-cli-mirage/commit/a73a195c1b991d226429ee369e2af688a95c7d95) @john-kurkowski
+  - Other bugfixes/enhancements @jherdman, @ef4, @seanpdoyle, @alecho, @bekzod
+
+## 0.2.0.beta-1
+
+Update notes:
+  - Move `/app/mirage` to `/mirage`
+
+Changes:
+  - [FEATURE] ORM, Serializers
+  - [ENHANCEMENT] @heroiceric
+  - [BREAKING CHANGE] missing routes will now throw an Error instead of logging to the Logger's `error` channel.
+
+## 0.1.11
+
+Update notes: none
+
+Changes:
+  - [BUGFIX]
+
+## 0.1.10
+
+Update notes: none
+
+Changes:
+  - [BUGFIX]
+
 ## 0.1.9
 
 Update notes:
@@ -40,7 +290,15 @@ Changes:
 
 ## 0.1.6
 
-Update notes: none
+Update notes:
+  - If you happened to be manipulating db objects using object references instead of the db API, e.g.
+
+    ```
+    let contact = db.contacts.find(1);
+    contact.name = 'Gandalf';
+    ```
+
+    this will no longer work, as the db query methods now return copies of db data. This was considered a private API. You'll need to use the db api (e.g. `db.update`) to make changes to db data.
 
 Changes:
   - [ENHANCEMENT] add PATCH to mirage @samselikoff
@@ -62,7 +320,7 @@ Changes:
 Update notes:
   - If you run the generator to update deps, the blueprint will put a file under `/scenarios/default.js`. The presence of this file will mean your fixtures will be ignored during development. If you'd still like to use your fixtures, delete the `/scenarios` directory.
 
-Changes: 
+Changes:
   - [IMPROVEMENT] factory-focused initial blueprints
 
 ## 0.1.3
@@ -173,9 +431,9 @@ Change:
 Update notes:
   - Rename your `/app/mirage/data` directory to `/app/mirage/fixtures`.
   - Move your `/tests/factories` directory to `/app/mirage/factories`.
-  - `store`, the data cache your routes interact with, has been renamed to `db` and its API has changed. 
+  - `store`, the data cache your routes interact with, has been renamed to `db` and its API has changed.
 
-    Your shorthand routes should not be affected, but you'll need to update any routes where you passed in a function and interacted with the store.See [the wiki entry](../../wiki/Database) for more details, and the new API. 
+    Your shorthand routes should not be affected, but you'll need to update any routes where you passed in a function and interacted with the store.See [the wiki entry](../../wiki/Database) for more details, and the new API.
 
 Changes:
 
@@ -183,7 +441,7 @@ Changes:
  - [BREAKING CHANGE] Move `/tests/factories` directory to `app/mirage/factories`
  - #41 [BREAKING CHANGE] Renamed `store` to `db`, and changed API. See [the wiki entry](../../wiki/Database).
  - #42 [ENHANCEMENT] Add ability to change timing within tests, e.g. to test the UI on long delays.
- - #6 [ENHANCEMENT] Add ability to force an error response from a route. 
+ - #6 [ENHANCEMENT] Add ability to force an error response from a route.
  - [ENHANCEMENT] Return POJO from route
  - [BUGFIX] ignore assets if Mirage isn't being used
 

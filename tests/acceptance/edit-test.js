@@ -1,20 +1,9 @@
-import Ember from 'ember';
-import {module, test} from 'qunit';
-import startApp from '../helpers/start-app';
+import {test} from 'qunit';
+import moduleForAcceptance from '../helpers/module-for-acceptance';
 
-var App;
+moduleForAcceptance('Acceptance | Edit');
 
-module('Acceptance: Edit', {
-  beforeEach: function() {
-    App = startApp();
-  },
-  afterEach: function() {
-    server.shutdown();
-    Ember.run(App, 'destroy');
-  }
-});
-
-test("I can edit a contact", function(assert) {
+test('I can edit a contact', function(assert) {
   server.create('contact');
 
   visit('/1');
@@ -24,7 +13,7 @@ test("I can edit a contact", function(assert) {
 
   andThen(function() {
     assert.equal(currentRouteName(), 'contact');
-    assert.equal( find('p:first').text(), 'The contact is Shiek' );
+    assert.equal(find('p:first').text(), 'The contact is Shiek');
   });
 });
 
