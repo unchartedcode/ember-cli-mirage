@@ -34,9 +34,6 @@ export default function(prefix) {
     let [, moduleType] = moduleParts;
     let moduleKey = moduleParts.slice(2, moduleParts.length).join('/');
 
-    Ember.assert(`Subdirectories under i${moduleType} are not supported`,
-                 moduleParts[moduleParts.length - 3] === 'mirage');
-
     if (moduleType === 'scenario') {
       Ember.assert('Only scenario/default.js is supported at this time.',
                    moduleKey !== 'default');
