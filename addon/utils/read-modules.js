@@ -29,9 +29,9 @@ export default function(prefix) {
       return;
     }
 
-    let modifiedModuleName = moduleName.substring(moduleName.indexOf('mirage/'))
+    let modifiedModuleName = moduleName.substring(moduleName.indexOf('mirage/'));
     let moduleParts = modifiedModuleName.split('/');
-    let moduleType = moduleParts[1];
+    let [, moduleType] = moduleParts;
     let moduleKey = moduleParts.slice(2, moduleParts.length).join('/');
 
     Ember.assert(`Subdirectories under i${moduleType} are not supported`,
