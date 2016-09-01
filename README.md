@@ -34,8 +34,12 @@ This project is new and the API is subject to change. When updating your project
 
 ## Getting started
 
-Check out the [Docs](http://www.ember-cli-mirage.com/docs/v0.1.x/)!
+Check out the [Docs](http://www.ember-cli-mirage.com/docs/v0.2.x/)!
 
 ## Support
 
 Having trouble? Open an issue!
+
+## Contributing
+
+Read our [roadmap](https://usecanvas.com/ec-mirage/mirage-roadmap/19kMeB5ceYCLmWrMZaRLez) and have a look at our [Contributing guidelines](./contributing).

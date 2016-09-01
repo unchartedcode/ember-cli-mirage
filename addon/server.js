@@ -1,6 +1,7 @@
 // jscs:disable requireParenthesesAroundArrowParam
 
 import { pluralize, camelize } from './utils/inflector';
+import { toCollectionName } from 'ember-cli-mirage/utils/normalize-name';
 import Pretender from 'pretender';
 import Db from './db';
 import Schema from './orm/schema';
@@ -199,7 +200,7 @@ export default class Server {
 
     // Create a collection for each factory
     _keys(factoryMap).forEach(type => {
-      let collectionName = this.schema ? pluralize(camelize(type)) : pluralize(type);
+      let collectionName = toCollectionName(type);
       this.db.createCollection(collectionName);
     });
   }
@@ -247,8 +248,8 @@ export default class Server {
     let attrs = this.build(type, overrides);
     let modelOrRecord;
 
-    if (this.schema && this.schema[pluralize(camelize(type))]) {
-      let modelClass = this.schema[pluralize(camelize(type))];
+    if (this.schema && this.schema[toCollectionName(type)]) {
+      let modelClass = this.schema[toCollectionName(type)];
 
       modelOrRecord = modelClass.create(attrs);
 
@@ -258,7 +259,7 @@ export default class Server {
       if (collectionFromCreateList) {
         collection = collectionFromCreateList;
       } else {
-        collectionName = this.schema ? pluralize(camelize(type)) : pluralize(type);
+        collectionName = this.schema ? toCollectionName(type) : pluralize(type);
         collection = this.db[collectionName];
       }
 
@@ -276,7 +277,7 @@ export default class Server {
 
   createList(type, amount, overrides) {
     let list = [];
-    let collectionName = this.schema ? pluralize(camelize(type)) : pluralize(type);
+    let collectionName = this.schema ? toCollectionName(type) : pluralize(type);
     let collection = this.db[collectionName];
 
     for (let i = 0; i < amount; i++) {
@@ -291,6 +292,34 @@ export default class Server {
     if (this.environment === 'test') {
       window.server = undefined;
     }
+  }
+
+  resource(resourceName, { only, except } = {}) {
+    only = only || [];
+    except = except || [];
+
+    if (only.length > 0 && except.length > 0) {
+      throw 'cannot use both :only and :except options';
+    }
+
+    let actionsMethodsAndsPathsMappings = {
+      index: { methods: ['get'], path: `/${resourceName}` },
+      show: { methods: ['get'], path: `/${resourceName}/:id` },
+      create: { methods: ['post'], path: `/${resourceName}` },
+      update: { methods: ['put', 'patch'], path: `/${resourceName}/:id` },
+      delete: { methods: ['del'], path: `/${resourceName}/:id` }
+    };
+
+    let allActions = Object.keys(actionsMethodsAndsPathsMappings);
+    let actions = only.length > 0 && only ||
+                  except.length > 0 && allActions.filter(action => (except.indexOf(action) === -1)) ||
+                  allActions;
+
+    actions.forEach((action) => {
+      let methodsWithPath = actionsMethodsAndsPathsMappings[action];
+
+      methodsWithPath.methods.forEach(method => this[method](methodsWithPath.path));
+    });
   }
 
   _defineRouteHandlerHelpers() {
@@ -360,13 +389,11 @@ export default class Server {
         fullPath += urlPrefix[urlPrefix.length - 1] === '/' ? urlPrefix : `${urlPrefix}/`;
       }
 
-      // if a namespace has been configured, add it before the path
-      if (!!namespace.length) {
-        fullPath += namespace ? `${namespace}/` : namespace;
-      }
+      // add the namespace to the path
+      fullPath += namespace;
 
-      // we're at the root, ensure a leading /
-      if (!urlPrefix.length && !namespace.length) {
+      // add a trailing slash to the path if it doesn't already contain one
+      if (fullPath[fullPath.length - 1] !== '/') {
         fullPath += '/';
       }
 
