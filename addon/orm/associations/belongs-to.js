@@ -4,19 +4,47 @@ import { capitalize, camelize } from 'ember-cli-mirage/utils/inflector';
 import { toCollectionName } from 'ember-cli-mirage/utils/normalize-name';
 import assert from 'ember-cli-mirage/assert';
 
+/**
+ * @class BelongsTo
+ * @extends Association
+ * @constructor
+ * @public
+ */
 class BelongsTo extends Association {
 
   /*
     The belongsTo association adds a fk to the owner of the association
   */
+  /**
+   * @method getForeignKeyArray
+   * @return {Array} Array of camelized name of the model owning the association
+   * and foreign key for the association
+   * @public
+   */
   getForeignKeyArray() {
-    return [camelize(this.ownerModelName), `${camelize(this.key)}Id`];
+    return [camelize(this.ownerModelName), this.getForeignKey()];
   }
 
+  /**
+   * @method getForeignKey
+   * @return {String} Foreign key for the association
+   * @public
+   */
   getForeignKey() {
     return `${camelize(this.key)}Id`;
   }
 
+  /**
+   * registers belongs-to association defined by given key on given model,
+   * defines getters / setters for associated parent and associated parent's id,
+   * adds methods for creating unsaved parent record and creating a saved one
+   *
+   * @method addMethodsToModelClass
+   * @param {Function} ModelClass
+   * @param {String} key
+   * @param {Schema} schema
+   * @public
+   */
   addMethodsToModelClass(ModelClass, key, schema) {
     let modelPrototype = ModelClass.prototype;
     let association = this;
@@ -103,13 +131,13 @@ class BelongsTo extends Association {
 
     /*
       object.createParent
-        - creates an associated parent, persists directly to db,
-          and updates the owner's foreign key
+        - creates a new saved associated parent, and immediately persists both models
     */
     modelPrototype[`create${capitalize(key)}`] = function(attrs) {
       let parent = schema[toCollectionName(association.modelName)].create(attrs);
 
-      this[foreignKey] = parent.id;
+      this[key] = parent;
+      this.save();
 
       return parent;
     };

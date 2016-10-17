@@ -9,10 +9,10 @@ import assert from './assert';
 import SerializerRegistry from './serializer-registry';
 import RouteHandler from './route-handler';
 
-import _isArray from 'lodash/lang/isArray';
-import _keys from 'lodash/object/keys';
 import _pick from 'lodash/object/pick';
 import _assign from 'lodash/object/assign';
+import _find from 'lodash/collection/find';
+import _isPlainObject from 'lodash/lang/isPlainObject';
 
 function createPretender(server) {
   return new Pretender(function() {
@@ -24,7 +24,7 @@ function createPretender(server) {
 
     this.handledRequest = function(verb, path, request) {
       if (server.shouldLog()) {
-        console.log(`Successful request: ${verb.toUpperCase()} ${request.url}`);
+        console.log(`Mirage: [${request.status}] ${verb.toUpperCase()} ${request.url}`);
         let { responseText } = request;
         let loggedResponse;
 
@@ -106,45 +106,59 @@ function extractRouteArguments(args) {
 export default class Server {
 
   constructor(options = {}) {
-    this.environment = options.environment || 'development';
-    this.options = options;
-    this.timing = 400;
-    this.namespace = '';
-    this.urlPrefix = '';
+    this.config(options);
+  }
+
+  config(config = {}) {
+    let didOverrideConfig = (config.environment && (this.environment && (this.environment !== config.environment)));
+    assert(!didOverrideConfig,
+    'You cannot modify Mirage\'s environment once the server is created');
+    this.environment = config.environment || 'development';
+
+    this.options = config;
+
+    this.timing = this.timing || config.timing || 400;
+    this.namespace = this.namespace || config.namespace || '';
+    this.urlPrefix = this.urlPrefix || config.urlPrefix || '';
 
     this._defineRouteHandlerHelpers();
 
-    this.db = new Db();
-    this.schema = new Schema(this.db, options.models);
-    this.serializerOrRegistry = new SerializerRegistry(this.schema, options.serializers);
+    this.db = this.db || new Db();
+    if (this.schema) {
+      this.schema.registerModels(config.models);
+      this.serializerOrRegistry.registerSerializers(config.serializers || {});
+    } else {
+      this.schema = new Schema(this.db, config.models);
+      this.serializerOrRegistry = new SerializerRegistry(this.schema, config.serializers);
+    }
 
-    let hasFactories = this._hasModulesOfType(options, 'factories');
-    let hasDefaultScenario = options.scenarios && options.scenarios.hasOwnProperty('default');
+    let hasFactories = this._hasModulesOfType(config, 'factories');
+    let hasDefaultScenario = config.scenarios && config.scenarios.hasOwnProperty('default');
 
-    this.pretender = createPretender(this);
+    this.pretender = this.pretender || createPretender(this);
 
-    if (options.baseConfig) {
-      this.loadConfig(options.baseConfig);
+    if (config.baseConfig) {
+      this.loadConfig(config.baseConfig);
     }
 
     if (this.isTest()) {
-      if (options.testConfig) {
-        this.loadConfig(options.testConfig);
+      if (config.testConfig) {
+        this.loadConfig(config.testConfig);
       }
 
       window.server = this; // TODO: Better way to inject server into test env
     }
 
     if (this.isTest() && hasFactories) {
-      this.loadFactories(options.factories);
+      this.loadFactories(config.factories);
     } else if (!this.isTest() && hasDefaultScenario) {
-      this.loadFactories(options.factories);
-      options.scenarios.default(this);
+      this.loadFactories(config.factories);
+      config.scenarios.default(this);
     } else {
       this.loadFixtures();
     }
 
-    if (options.useDefaultPassthroughs) {
+    if (config.useDefaultPassthroughs) {
       this._configureDefaultPassthroughs();
     }
   }
@@ -169,7 +183,7 @@ export default class Server {
     if (paths.length === 0) {
       // paths = ['http://localhost:7357'];
       paths = ['/**', '/'];
-    } else if (_isArray(lastArg)) {
+    } else if (Array.isArray(lastArg)) {
       verbs = paths.pop();
     }
 
@@ -194,12 +208,13 @@ export default class Server {
   /*
     Factory methods
   */
-  loadFactories(factoryMap) {
+  loadFactories(factoryMap = {}) {
     // Store a reference to the factories
-    this._factoryMap = factoryMap;
+    let currentFactoryMap = this._factoryMap || {};
+    this._factoryMap = _assign(currentFactoryMap, factoryMap);
 
     // Create a collection for each factory
-    _keys(factoryMap).forEach(type => {
+    Object.keys(factoryMap).forEach(type => {
       let collectionName = toCollectionName(type);
       this.db.createCollection(collectionName);
     });
@@ -213,7 +228,9 @@ export default class Server {
     }
   }
 
-  build(type, overrides) {
+  build(type, ...traitsAndOverrides) {
+    let traits = traitsAndOverrides.filter((arg) => arg && typeof arg === 'string');
+    let overrides = _find(traitsAndOverrides, (arg) => _isPlainObject(arg));
     let camelizedType = camelize(type);
 
     // Store sequence for factory type as instance variable
@@ -222,7 +239,24 @@ export default class Server {
 
     let OriginalFactory = this.factoryFor(type);
     if (OriginalFactory) {
-      let Factory = OriginalFactory.extend(overrides);
+      let { attrs } = OriginalFactory;
+
+      traits.forEach((traitName) => {
+        if (!OriginalFactory.isTrait(traitName)) {
+          throw new Error(`'${traitName}' trait is not registered in '${type}' factory`);
+        }
+      });
+
+      let allExtensions = traits.map((traitName) => {
+        // throw error if not registered
+        return attrs[traitName].extension;
+      });
+      allExtensions.push(overrides || {});
+      let mergedExtensions = allExtensions.reduce((accum, extension) => {
+        return _assign(accum, extension);
+      }, {});
+
+      let Factory = OriginalFactory.extend(mergedExtensions);
       let factory = new Factory();
 
       let sequence = this.factorySequences[camelizedType];
@@ -232,11 +266,11 @@ export default class Server {
     }
   }
 
-  buildList(type, amount, overrides) {
+  buildList(type, amount, ...traitsAndOverrides) {
     let list = [];
 
     for (let i = 0; i < amount; i++) {
-      list.push(this.build(type, overrides));
+      list.push(this.build(type, ...traitsAndOverrides));
     }
 
     return list;
@@ -244,8 +278,12 @@ export default class Server {
 
   // When there is a Model defined, we should return an instance
   // of it instead of returning the bare attributes.
-  create(type, overrides, collectionFromCreateList) {
-    let attrs = this.build(type, overrides);
+  create(type, ...options) {
+    let traits = options.filter((arg) => arg && typeof arg === 'string');
+    let overrides = _find(options, (arg) => _isPlainObject(arg));
+    let collectionFromCreateList = _find(options, (arg) => arg && Array.isArray(arg));
+
+    let attrs = this.build(type, ...traits, overrides);
     let modelOrRecord;
 
     if (this.schema && this.schema[toCollectionName(type)]) {
@@ -268,20 +306,22 @@ export default class Server {
     }
 
     let OriginalFactory = this.factoryFor(type);
-    if (OriginalFactory && OriginalFactory.attrs && OriginalFactory.attrs.afterCreate) {
-      OriginalFactory.attrs.afterCreate(modelOrRecord, this);
+    if (OriginalFactory) {
+      OriginalFactory.extractAfterCreateCallbacks({ traits }).forEach((afterCreate) => {
+        afterCreate(modelOrRecord, this);
+      });
     }
 
     return modelOrRecord;
   }
 
-  createList(type, amount, overrides) {
+  createList(type, amount, ...traitsAndOverrides) {
     let list = [];
     let collectionName = this.schema ? toCollectionName(type) : pluralize(type);
     let collection = this.db[collectionName];
 
     for (let i = 0; i < amount; i++) {
-      list.push(this.create(type, overrides, collection));
+      list.push(this.create(type, ...traitsAndOverrides, collection));
     }
 
     return list;
@@ -366,7 +406,7 @@ export default class Server {
 
   _hasModulesOfType(modules, type) {
     let modulesOfType = modules[type];
-    return modulesOfType ? _keys(modulesOfType).length > 0 : false;
+    return modulesOfType ? Object.keys(modulesOfType).length > 0 : false;
   }
 
   /*

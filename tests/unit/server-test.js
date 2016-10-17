@@ -1,19 +1,22 @@
 // jscs:disable requireCamelCaseOrUpperCaseIdentifiers, disallowMultipleVarDecl
 import Server, { defaultPassthroughs } from 'ember-cli-mirage/server';
 import {module, test} from 'qunit';
-import { Model, Factory } from 'ember-cli-mirage';
+import { Model, Factory, trait } from 'ember-cli-mirage';
 
 module('Unit | Server');
 
 test('it can be instantiated', function(assert) {
   let server = new Server({ environment: 'test' });
+
   assert.ok(server);
+
+  server.shutdown();
 });
 
 test('it runs the default scenario in non-test environments', function(assert) {
   assert.expect(1);
 
-  new Server({
+  let server = new Server({
     environment: 'development',
     scenarios: {
       default(server) {
@@ -21,36 +24,51 @@ test('it runs the default scenario in non-test environments', function(assert) {
       }
     }
   });
+
+  server.shutdown();
 });
 
 module('Unit | Server #loadConfig');
 
 test('forces timing to 0 in test environment', function(assert) {
   let server = new Server({ environment: 'test' });
+
   server.loadConfig(function() {
     this.timing = 50;
   });
+
   assert.equal(server.timing, 0);
+
+  server.shutdown();
 });
 
 test("doesn't modify user's timing config in other environments", function(assert) {
   let server = new Server({ environment: 'blah' });
+
   server.loadConfig(function() {
     this.timing = 50;
   });
+
   assert.equal(server.timing, 50);
+
+  server.shutdown();
 });
 
 module('Unit | Server #db');
 
 test('its db is isolated across instances', function(assert) {
   let server1 = new Server({ environment: 'test' });
+
   server1.db.createCollection('contacts');
   server1.db.contacts.insert({ name: 'Sam' });
+
+  server1.shutdown();
 
   let server2 = new Server({ environment: 'test' });
 
   assert.equal(server2.contacts, undefined);
+
+  server2.shutdown();
 });
 
 module('Unit | Server #create');
@@ -61,6 +79,8 @@ test('create fails when no factories or models are registered', function(assert)
   assert.throws(function() {
     server.create('contact');
   });
+
+  server.shutdown();
 });
 
 test('create fails when an expected factory isn\'t registered', function(assert) {
@@ -74,6 +94,8 @@ test('create fails when an expected factory isn\'t registered', function(assert)
   assert.throws(function() {
     server.create('contact');
   }, /no model or factory was found/);
+
+  server.shutdown();
 });
 
 test('create works when models but no factories are registered', function(assert) {
@@ -85,7 +107,10 @@ test('create works when models but no factories are registered', function(assert
   });
 
   server.create('contact');
+
   assert.equal(server.db.contacts.length, 1);
+
+  server.shutdown();
 });
 
 test('create adds the data to the db', function(assert) {
@@ -103,6 +128,8 @@ test('create adds the data to the db', function(assert) {
 
   assert.equal(contactsInDb.length, 1);
   assert.deepEqual(contactsInDb[0], { id: '1', name: 'Sam' });
+
+  server.shutdown();
 });
 
 test('create returns the new data in the db', function(assert) {
@@ -118,6 +145,8 @@ test('create returns the new data in the db', function(assert) {
   let contact = server.create('contact');
 
   assert.deepEqual(contact, { id: '1', name: 'Sam' });
+
+  server.shutdown();
 });
 
 test('create allows for attr overrides', function(assert) {
@@ -135,6 +164,8 @@ test('create allows for attr overrides', function(assert) {
 
   assert.deepEqual(sam, { id: '1', name: 'Sam' });
   assert.deepEqual(link, { id: '2', name: 'Link' });
+
+  server.shutdown();
 });
 
 test('create allows for attr overrides with extended factories', function(assert) {
@@ -161,6 +192,8 @@ test('create allows for attr overrides with extended factories', function(assert
 
   assert.deepEqual(link, { id: '1', name: 'Link', age: 500, is_young: false });
   assert.deepEqual(youngLink, { id: '2', name: 'Link', age: 10, is_young: true });
+
+  server.shutdown();
 });
 
 test('create allows for attr overrides with arrays', function(assert) {
@@ -180,6 +213,8 @@ test('create allows for attr overrides with arrays', function(assert) {
   assert.deepEqual(sam, { id: '1', name: ['Sam', 'Carl'] });
   assert.deepEqual(link, { id: '2', name: ['Link'] });
   assert.deepEqual(noname, { id: '3', name: [] });
+
+  server.shutdown();
 });
 
 test('create allows for nested attr overrides', function(assert) {
@@ -202,6 +237,8 @@ test('create allows for nested attr overrides', function(assert) {
 
   assert.deepEqual(contact1, { id: '1', address: { streetName: 'Main', streetAddress: 1000 } });
   assert.deepEqual(contact2, { id: '2', address: { streetName: 'Main', streetAddress: 1001 } });
+
+  server.shutdown();
 });
 
 test('create allows for arrays of attr overrides', function(assert) {
@@ -224,11 +261,197 @@ test('create allows for arrays of attr overrides', function(assert) {
 
   assert.deepEqual(contact1, { id: '1', websites: ['http://example.com', 'http://placekitten.com/320/240'] });
   assert.deepEqual(contact2, { id: '2', websites: ['http://example.com', 'http://placekitten.com/321/241'] });
+
+  server.shutdown();
+});
+
+test('create allows to extend factory with trait', function(assert) {
+  let ArticleFactory = Factory.extend({
+    title: 'Lorem ipsum',
+
+    published: trait({
+      isPublished: true,
+      publishedAt: '2010-01-01 10:00:00'
+    })
+  });
+
+  let server = new Server({
+    environment: 'test',
+    factories: {
+      article: ArticleFactory
+    }
+  });
+
+  let article = server.create('article');
+  let publishedArticle = server.create('article', 'published');
+
+  assert.deepEqual(article, { id: '1', title: 'Lorem ipsum' });
+  assert.deepEqual(publishedArticle, { id: '2', title: 'Lorem ipsum', isPublished: true,
+    publishedAt: '2010-01-01 10:00:00' });
+
+  server.shutdown();
+});
+
+test('create allows to extend factory with multiple traits', function(assert) {
+  let ArticleFactory = Factory.extend({
+    title: 'Lorem ipsum',
+
+    published: trait({
+      isPublished: true,
+      publishedAt: '2010-01-01 10:00:00'
+    }),
+
+    withContent: trait({
+      content: 'content'
+    })
+  });
+
+  let server = new Server({
+    environment: 'test',
+    factories: {
+      article: ArticleFactory
+    }
+  });
+
+  let article = server.create('article');
+  let publishedArticle = server.create('article', 'published');
+  let publishedArticleWithContent = server.create('article', 'published', 'withContent');
+
+  assert.deepEqual(article, { id: '1', title: 'Lorem ipsum' });
+  assert.deepEqual(publishedArticle, { id: '2', title: 'Lorem ipsum', isPublished: true,
+    publishedAt: '2010-01-01 10:00:00' });
+  assert.deepEqual(publishedArticleWithContent, { id: '3', title: 'Lorem ipsum', isPublished: true,
+    publishedAt: '2010-01-01 10:00:00', content: 'content' });
+
+  server.shutdown();
+});
+
+test('create allows to extend factory with traits containing afterCreate callbacks', function(assert) {
+  let CommentFactory = Factory.extend({
+    content: 'content'
+  });
+  let ArticleFactory = Factory.extend({
+    title: 'Lorem ipsum',
+
+    withComments: trait({
+      afterCreate(article, server) {
+        server.createList('comment', 3, { article });
+      }
+    })
+  });
+
+  let server = new Server({
+    environment: 'test',
+    factories: {
+      article: ArticleFactory,
+      comment: CommentFactory
+    }
+  });
+
+  let articleWithComments = server.create('article', 'withComments');
+
+  assert.deepEqual(articleWithComments, { id: '1', title: 'Lorem ipsum' });
+  assert.equal(server.db.comments.length, 3);
+
+  server.shutdown();
+});
+
+test('create does not execute afterCreate callbacks from traits that are not applied', function(assert) {
+  let CommentFactory = Factory.extend({
+    content: 'content'
+  });
+  let ArticleFactory = Factory.extend({
+    title: 'Lorem ipsum',
+
+    withComments: trait({
+      afterCreate(article, server) {
+        server.createList('comment', 3, { article });
+      }
+    })
+  });
+
+  let server = new Server({
+    environment: 'test',
+    factories: {
+      article: ArticleFactory,
+      comment: CommentFactory
+    }
+  });
+
+  let articleWithComments = server.create('article');
+
+  assert.deepEqual(articleWithComments, { id: '1', title: 'Lorem ipsum' });
+  assert.equal(server.db.comments.length, 0);
+
+  server.shutdown();
+});
+
+test('create allows to extend with multiple traits and to apply attr overrides', function(assert) {
+  let ArticleFactory = Factory.extend({
+    title: 'Lorem ipsum',
+
+    published: trait({
+      isPublished: true,
+      publishedAt: '2010-01-01 10:00:00'
+    }),
+
+    withContent: trait({
+      content: 'content'
+    })
+  });
+
+  let server = new Server({
+    environment: 'test',
+    factories: {
+      article: ArticleFactory
+    }
+  });
+
+  let overrides = {
+    publishedAt: '2012-01-01 10:00:00'
+  };
+  let publishedArticleWithContent = server.create('article', 'published', 'withContent', overrides);
+
+  assert.deepEqual(publishedArticleWithContent, { id: '1', title: 'Lorem ipsum', isPublished: true,
+    publishedAt: '2012-01-01 10:00:00', content: 'content' });
+
+  server.shutdown();
+});
+
+test('create throws errors when using trait that is not defined and distinquishes between traits and non-traits', function(assert) {
+  let ArticleFactory = Factory.extend({
+    title: 'Lorem ipsum',
+
+    published: trait({
+      isPublished: true,
+      publishedAt: '2010-01-01 10:00:00'
+    }),
+
+    private: {
+      someAttr: 'value'
+    }
+  });
+
+  let server = new Server({
+    environment: 'test',
+    factories: {
+      article: ArticleFactory
+    }
+  });
+
+  assert.throws(() => {
+    server.create('article', 'private');
+  }, /'private' trait is not registered in 'article' factory/);
+
+  server.shutdown();
 });
 
 module('Unit | Server #createList', {
   beforeEach() {
     this.server = new Server({ environment: 'test' });
+  },
+  afterEach() {
+    this.server.shutdown();
   }
 });
 
@@ -290,9 +513,88 @@ test('createList respects attr overrides', function(assert) {
   assert.deepEqual(links[1], { id: '4', name: 'Link' });
 });
 
+test('createList respects traits', function(assert) {
+  let ArticleFactory = Factory.extend({
+    title: 'Lorem ipsum',
+
+    published: trait({
+      isPublished: true,
+      publishedAt: '2010-01-01 10:00:00'
+    }),
+
+    withContent: trait({
+      content: 'content'
+    })
+  });
+
+  this.server.loadFactories({
+    article: ArticleFactory
+  });
+
+  let articles = this.server.createList('article', 2, 'published', 'withContent');
+
+  assert.deepEqual(articles[0], { id: '1', title: 'Lorem ipsum', isPublished: true,
+    publishedAt: '2010-01-01 10:00:00', content: 'content' });
+  assert.deepEqual(articles[1], { id: '2', title: 'Lorem ipsum', isPublished: true,
+    publishedAt: '2010-01-01 10:00:00', content: 'content' });
+});
+
+test('createList respects traits with attr overrides', function(assert) {
+  let ArticleFactory = Factory.extend({
+    title: 'Lorem ipsum',
+
+    published: trait({
+      isPublished: true,
+      publishedAt: '2010-01-01 10:00:00'
+    }),
+
+    withContent: trait({
+      content: 'content'
+    })
+  });
+
+  this.server.loadFactories({
+    article: ArticleFactory
+  });
+
+  let overrides = { publishedAt: '2012-01-01 10:00:00' };
+  let articles = this.server.createList('article', 2, 'published', 'withContent', overrides);
+
+  assert.deepEqual(articles[0], { id: '1', title: 'Lorem ipsum', isPublished: true,
+    publishedAt: '2012-01-01 10:00:00', content: 'content' });
+  assert.deepEqual(articles[1], { id: '2', title: 'Lorem ipsum', isPublished: true,
+    publishedAt: '2012-01-01 10:00:00', content: 'content' });
+});
+
+test('createList throws errors when using trait that is not defined and distinquishes between traits and non-traits', function(assert) {
+  let ArticleFactory = Factory.extend({
+    title: 'Lorem ipsum',
+
+    published: trait({
+      isPublished: true,
+      publishedAt: '2010-01-01 10:00:00'
+    }),
+
+    private: {
+      someAttr: 'value'
+    }
+  });
+
+  this.server.loadFactories({
+    article: ArticleFactory
+  });
+
+  assert.throws(() => {
+    this.server.createList('article', 2, 'private');
+  }, /'private' trait is not registered in 'article' factory/);
+});
+
 module('Unit | Server #build', {
   beforeEach() {
     this.server = new Server({ environment: 'test' });
+  },
+  afterEach() {
+    this.server.shutdown();
   }
 });
 
@@ -403,9 +705,113 @@ test('build allows for arrays of attr overrides', function(assert) {
   assert.deepEqual(contact2, { websites: ['http://example.com', 'http://placekitten.com/321/241'] });
 });
 
+test('build allows to extend factory with trait', function(assert) {
+  let ArticleFactory = Factory.extend({
+    title: 'Lorem ipsum',
+
+    published: trait({
+      isPublished: true,
+      publishedAt: '2010-01-01 10:00:00'
+    })
+  });
+
+  this.server.loadFactories({
+    article: ArticleFactory
+  });
+
+  let article = this.server.build('article');
+  let publishedArticle = this.server.build('article', 'published');
+
+  assert.deepEqual(article, { title: 'Lorem ipsum' });
+  assert.deepEqual(publishedArticle, { title: 'Lorem ipsum', isPublished: true,
+    publishedAt: '2010-01-01 10:00:00' });
+});
+
+test('build allows to extend factory with multiple traits', function(assert) {
+  let ArticleFactory = Factory.extend({
+    title: 'Lorem ipsum',
+
+    published: trait({
+      isPublished: true,
+      publishedAt: '2010-01-01 10:00:00'
+    }),
+
+    withContent: trait({
+      content: 'content'
+    })
+  });
+
+  this.server.loadFactories({
+    article: ArticleFactory
+  });
+
+  let article = this.server.build('article');
+  let publishedArticle = this.server.build('article', 'published');
+  let publishedArticleWithContent = this.server.build('article', 'published', 'withContent');
+
+  assert.deepEqual(article, { title: 'Lorem ipsum' });
+  assert.deepEqual(publishedArticle, { title: 'Lorem ipsum', isPublished: true,
+    publishedAt: '2010-01-01 10:00:00' });
+  assert.deepEqual(publishedArticleWithContent, { title: 'Lorem ipsum', isPublished: true,
+    publishedAt: '2010-01-01 10:00:00', content: 'content' });
+});
+
+test('build allows to extend with multiple traits and to apply attr overrides', function(assert) {
+  let ArticleFactory = Factory.extend({
+    title: 'Lorem ipsum',
+
+    published: trait({
+      isPublished: true,
+      publishedAt: '2010-01-01 10:00:00'
+    }),
+
+    withContent: trait({
+      content: 'content'
+    })
+  });
+
+  this.server.loadFactories({
+    article: ArticleFactory
+  });
+
+  let overrides = {
+    publishedAt: '2012-01-01 10:00:00'
+  };
+  let publishedArticleWithContent = this.server.build('article', 'published', 'withContent', overrides);
+
+  assert.deepEqual(publishedArticleWithContent, { title: 'Lorem ipsum', isPublished: true,
+    publishedAt: '2012-01-01 10:00:00', content: 'content' });
+});
+
+test('build throws errors when using trait that is not defined and distinquishes between traits and non-traits', function(assert) {
+  let ArticleFactory = Factory.extend({
+    title: 'Lorem ipsum',
+
+    published: trait({
+      isPublished: true,
+      publishedAt: '2010-01-01 10:00:00'
+    }),
+
+    private: {
+      someAttr: 'value'
+    }
+  });
+
+  this.server.loadFactories({
+    article: ArticleFactory
+  });
+
+  assert.throws(() => {
+    this.server.build('article', 'private');
+  }, /'private' trait is not registered in 'article' factory/);
+});
+
 module('Unit | Server #buildList', {
   beforeEach() {
     this.server = new Server({ environment: 'test' });
+  },
+  afterEach() {
+    this.server.shutdown();
   }
 });
 
@@ -464,6 +870,82 @@ test('buildList respects attr overrides', function(assert) {
   assert.deepEqual(links[1], { name: 'Link' });
 });
 
+test('buildList respects traits', function(assert) {
+  let ArticleFactory = Factory.extend({
+    title: 'Lorem ipsum',
+
+    published: trait({
+      isPublished: true,
+      publishedAt: '2010-01-01 10:00:00'
+    }),
+
+    withContent: trait({
+      content: 'content'
+    })
+  });
+
+  this.server.loadFactories({
+    article: ArticleFactory
+  });
+
+  let articles = this.server.buildList('article', 2, 'published', 'withContent');
+
+  assert.deepEqual(articles[0], { title: 'Lorem ipsum', isPublished: true,
+    publishedAt: '2010-01-01 10:00:00', content: 'content' });
+  assert.deepEqual(articles[1], { title: 'Lorem ipsum', isPublished: true,
+    publishedAt: '2010-01-01 10:00:00', content: 'content' });
+});
+
+test('buildList respects traits with attr overrides', function(assert) {
+  let ArticleFactory = Factory.extend({
+    title: 'Lorem ipsum',
+
+    published: trait({
+      isPublished: true,
+      publishedAt: '2010-01-01 10:00:00'
+    }),
+
+    withContent: trait({
+      content: 'content'
+    })
+  });
+
+  this.server.loadFactories({
+    article: ArticleFactory
+  });
+
+  let overrides = { publishedAt: '2012-01-01 10:00:00' };
+  let articles = this.server.buildList('article', 2, 'published', 'withContent', overrides);
+
+  assert.deepEqual(articles[0], { title: 'Lorem ipsum', isPublished: true,
+    publishedAt: '2012-01-01 10:00:00', content: 'content' });
+  assert.deepEqual(articles[1], { title: 'Lorem ipsum', isPublished: true,
+    publishedAt: '2012-01-01 10:00:00', content: 'content' });
+});
+
+test('buildList throws errors when using trait that is not defined and distinquishes between traits and non-traits', function(assert) {
+  let ArticleFactory = Factory.extend({
+    title: 'Lorem ipsum',
+
+    published: trait({
+      isPublished: true,
+      publishedAt: '2010-01-01 10:00:00'
+    }),
+
+    private: {
+      someAttr: 'value'
+    }
+  });
+
+  this.server.loadFactories({
+    article: ArticleFactory
+  });
+
+  assert.throws(() => {
+    this.server.buildList('article', 2, 'private');
+  }, /'private' trait is not registered in 'article' factory/);
+});
+
 module('Unit | Server #defaultPassthroughs');
 
 test('server configures default passthroughs when useDefaultPassthroughs is true', function(assert) {
@@ -476,6 +958,8 @@ test('server configures default passthroughs when useDefaultPassthroughs is true
 
     assert.ok(isPassedThrough);
   });
+
+  server.shutdown();
 });
 
 test('server does not configure default passthroughs when useDefaultPassthroughs is false', function(assert) {
@@ -488,4 +972,6 @@ test('server does not configure default passthroughs when useDefaultPassthroughs
 
     assert.ok(!isPassedThrough);
   });
+
+  server.shutdown();
 });
