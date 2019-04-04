@@ -1,5 +1,5 @@
 import Serializer from '../serializer';
-import { dasherize, pluralize, camelize } from '../utils/inflector';
+import { dasherize, pluralize, camelize, underscore } from '../utils/inflector';
 import _get from 'lodash/get';
 import _ from 'lodash';
 import assert from 'ember-cli-mirage/assert';
@@ -281,7 +281,7 @@ const JSONAPISerializer = Serializer.extend({
           let relationshipKeys = includesPath.split('.').map(dasherize);
           let relationshipKey = relationshipKeys[0];
           let graphRelationshipKey = relationshipKey;
-          let normalizedRelationshipKey = camelize(relationshipKey);
+          let normalizedRelationshipKey = underscore(relationshipKey);
           let hasAssociation = model.associationKeys.includes(normalizedRelationshipKey);
 
           assert(hasAssociation, `You tried to include "${relationshipKey}" with ${model} but no association named "${normalizedRelationshipKey}" is defined on the model.`);
