@@ -1,5 +1,5 @@
 import assert from 'ember-cli-mirage/assert';
-import { camelize, singularize, dasherize } from 'ember-cli-mirage/utils/inflector';
+import { camelize, singularize, dasherize, underscore } from 'ember-cli-mirage/utils/inflector';
 import HasMany from '../orm/associations/has-many';
 
 const PATH_VAR_REGEXP = /^:/;
@@ -65,7 +65,7 @@ export default class BaseRouteHandler {
       Object.keys(json.data.relationships).forEach((relationshipName) => {
         let relationship = json.data.relationships[relationshipName];
         let modelClass = this.schema.modelClassFor(modelName);
-        let association = modelClass.associationFor(camelize(relationshipName));
+        let association = modelClass.associationFor(underscore(relationshipName));
         let valueForRelationship;
 
         assert(
