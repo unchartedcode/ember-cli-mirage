@@ -56,7 +56,7 @@ export default class BaseRouteHandler {
 
     if (json.data.attributes) {
       attrs = Object.keys(json.data.attributes).reduce((sum, key) => {
-        sum[camelize(key)] = json.data.attributes[key];
+        sum[underscore(key)] = json.data.attributes[key];
         return sum;
       }, {});
     }
