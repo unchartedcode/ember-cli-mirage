@@ -103,7 +103,7 @@ const JSONAPISerializer = Serializer.extend({
   },
 
   getIncludesForResourceAndPath(resource, ...names) {
-    let nameForCurrentResource = camelize(names.shift());
+    let nameForCurrentResource = underscore(names.shift());
     let includes = [];
     let modelsToAdd = [];
 
