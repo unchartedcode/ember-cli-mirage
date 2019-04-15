@@ -1,5 +1,5 @@
 import Serializer from '../serializer';
-import { dasherize, pluralize, camelize, underscore } from '../utils/inflector';
+import { dasherize, pluralize, underscore } from '../utils/inflector';
 import _get from 'lodash/get';
 import _ from 'lodash';
 import assert from 'ember-cli-mirage/assert';
@@ -336,7 +336,7 @@ const JSONAPISerializer = Serializer.extend({
     graph.included[collectionName][resourceKey].relationships = graph.included[collectionName][resourceKey].relationships || {};
 
     let relationshipName = relationshipNames[0];
-    let relationship = model[camelize(relationshipName)];
+    let relationship = model[underscore(relationshipName)];
     let relationshipData;
 
     if (this.isModel(relationship)) {
