@@ -3,22 +3,6 @@ import { Model, ActiveModelSerializer } from 'ember-cli-mirage';
 import Server from 'ember-cli-mirage/server';
 import promiseAjax from '../../../helpers/promise-ajax';
 
-// eslint-disable-next-line no-console
-let originalWarn = console.warn;
-
-function expectWarning(assert, warning) {
-  if (!warning) {
-    assert.ok(false, 'You must pass in a message when expecting a warning');
-  }
-
-  // eslint-disable-next-line no-console
-  console.warn = message => {
-    let re = new RegExp(warning.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-
-    assert.ok(re.test(message), 'the correct warning message was logged');
-  };
-}
-
 module('Integration | Route handlers | Function handler | #normalizedRequestAttrs', function(hooks) {
   hooks.beforeEach(function() {
     this.server = new Server({
@@ -39,9 +23,6 @@ module('Integration | Route handlers | Function handler | #normalizedRequestAttr
 
   hooks.afterEach(function() {
     this.server.shutdown();
-
-    // eslint-disable-next-line no-console
-    console.warn = originalWarn;
   });
 
   test(`it returns an object with the primary resource's attrs and belongsTo keys camelized`, async function(assert) {
@@ -102,25 +83,15 @@ module('Integration | Route handlers | Function handler | #normalizedRequestAttr
     assert.expect(1);
 
     this.server.post('/users/create', function() {
-      assert.throws(() => {
-        this.normalizedRequestAttrs();
-      }, /the detected model of 'create' does not exist/);
-
-      return {};
+      this.normalizedRequestAttrs();
     });
 
-    await promiseAjax({
-      method: 'POST',
-      url: '/users/create',
-      contentType: 'application/json',
-      data: JSON.stringify({
-        user: {
-          first_name: 'Sam',
-          last_name: 'Selikoff',
-          team_id: 1
-        }
-      })
-    });
+    assert.rejects(
+      promiseAjax({ method: 'POST', url: '/users/create' }),
+      function(ajaxError) {
+        return ajaxError.xhr.responseText.indexOf(`the detected model of 'create' does not exist`) > -1;
+      }
+    );
   });
 
   test(`it accepts an optional modelName if it cannot be inferred from the path `, async function(assert) {
@@ -152,30 +123,19 @@ module('Integration | Route handlers | Function handler | #normalizedRequestAttr
     });
   });
 
-  test(`it warns if the optional parameter is camelized for a model with a compount name`, async function(assert) {
-    assert.expect(2);
-    expectWarning(assert, `but normalizedRequestAttrs was intended to be used with the dasherized version of the model type`);
+  test(`it errors if the optional parameter is camelized for a model with a compount name`, async function(assert) {
+    assert.expect(1);
 
     this.server.post('/fine-comments/create', function() {
-      let attrs = this.normalizedRequestAttrs('fineComment');
-
-      assert.deepEqual(attrs, {
-        shortText: 'lorem ipsum'
-      });
-
-      return {};
+      this.normalizedRequestAttrs('fineComment');
     });
 
-    await promiseAjax({
-      method: 'POST',
-      url: '/fine-comments/create',
-      contentType: 'application/json',
-      data: JSON.stringify({
-        user: {
-          short_text: 'lorem ipsum'
-        }
-      })
-    });
+    assert.rejects(
+      promiseAjax({ method: 'POST', url: '/fine-comments/create' }),
+      function(ajaxError) {
+        return ajaxError.xhr.responseText.indexOf(`You called normalizedRequestAttrs('fineComment'), but normalizedRequestAttrs was intended to be used with the dasherized version of the model type. Please change this to normalizedRequestAttrs('fine-comment')`) > 0;
+      }
+    );
   });
 
   test(`it works with a form encoded request that has a lower-case content-type (issue 1398)`, async function(assert) {
