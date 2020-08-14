@@ -1,7 +1,7 @@
 import { getWithDefault } from '@ember/object';
-import readModules from 'ember-cli-mirage/utils/read-modules';
-import Server from 'ember-cli-mirage/server';
-import _assign from 'lodash/assign';
+import readModules from './utils/read-modules';
+import Server from './server';
+import { singularize, pluralize } from 'ember-inflector';
 
 /**
   Helper to start mirage. This should not be called directly. In rfc232/rfc268
@@ -32,8 +32,9 @@ export default function startMirage(owner, { env, baseConfig, testConfig } = {})
   let environment = env.environment;
   let discoverEmberDataModels = getWithDefault(env['ember-cli-mirage'] || {}, 'discoverEmberDataModels', true);
   let modules = readModules(env.modulePrefix);
-  let options = _assign(modules, {environment, baseConfig, testConfig, discoverEmberDataModels});
+  let options = Object.assign(modules, {environment, baseConfig, testConfig, discoverEmberDataModels});
   options.trackRequests = env['ember-cli-mirage'].trackRequests;
+  options.inflector = { singularize, pluralize };
 
   return new Server(options);
 }

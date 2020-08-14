@@ -1,10 +1,10 @@
-/* global requirejs, require */
+/* global requirejs */
 /* eslint-env node */
 'use strict';
 
-import { assert } from '@ember/debug';
-import _camelCase from 'lodash/camelCase';
-import { pluralize } from 'ember-cli-mirage/utils/inflector';
+import assert from '../assert';
+import { camelCase } from 'lodash-es';
+import { pluralize } from '../utils/inflector';
 import require from 'require';
 
 /**
@@ -18,7 +18,7 @@ export default function(prefix) {
   let modules = ['factories', 'fixtures', 'scenarios', 'models', 'serializers', 'identity-managers'];
   let mirageModuleRegExp = new RegExp(`^${prefix}/mirage/(${modules.join('|')})`);
   let modulesMap = modules.reduce((memo, name) => {
-    memo[_camelCase(name)] = {};
+    memo[camelCase(name)] = {};
     return memo;
   }, {});
 
@@ -29,7 +29,7 @@ export default function(prefix) {
       return;
     }
     let moduleParts = moduleName.split('/');
-    let moduleType = _camelCase(moduleParts[moduleParts.length - 2]);
+    let moduleType = camelCase(moduleParts[moduleParts.length - 2]);
     let moduleKey = moduleParts[moduleParts.length - 1];
     assert(`Subdirectories under ${moduleType} are not supported`,
       moduleParts[moduleParts.length - 3] === 'mirage');
@@ -53,7 +53,7 @@ export default function(prefix) {
 
     let data = module.default;
 
-    modulesMap[moduleType][_camelCase(moduleKey)] = data;
+    modulesMap[moduleType][camelCase(moduleKey)] = data;
   });
 
   return modulesMap;
