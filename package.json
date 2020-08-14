@@ -43,7 +43,7 @@
     "ember-get-config": "^0.2.2",
     "ember-inflector": "^2.0.0 || ^3.0.0",
     "lodash-es": "^4.17.11",
-    "miragejs": "^0.1.31"
+    "miragejs": "git://github.com/unchartedcode/miragejs#fef13ca40a10be83e67bce14130afa14aabd1d4e"
   },
   "devDependencies": {
     "@ember/jquery": "^1.1.0",

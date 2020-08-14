@@ -10905,10 +10905,9 @@ minipass@^2.2.0:
     safe-buffer "^5.1.2"
     yallist "^3.0.0"
 
-miragejs@^0.1.31:
+"miragejs@git://github.com/unchartedcode/miragejs#fef13ca40a10be83e67bce14130afa14aabd1d4e":
   version "0.1.40"
-  resolved "https://registry.yarnpkg.com/miragejs/-/miragejs-0.1.40.tgz#5bcba7634312c012748ae7f294e1516b74b37182"
-  integrity sha512-7zxIcynzdS6425KZ2+TWD6F6DqESorulSDW2QBXf4iKyVn/J5vSielcubAK8sTKUefTPCrSRi7PwgNOb0JlmIg==
+  resolved "git://github.com/unchartedcode/miragejs#fef13ca40a10be83e67bce14130afa14aabd1d4e"
   dependencies:
     "@miragejs/pretender-node-polyfill" "^0.1.0"
     inflected "^2.0.4"
